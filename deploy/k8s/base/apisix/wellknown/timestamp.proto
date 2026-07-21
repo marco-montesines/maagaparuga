@@ -1,0 +1,24 @@
+// google/protobuf/timestamp.proto — from the Protocol Buffers project
+// (Copyright Google Inc., BSD-3-Clause; see https://github.com/protocolbuffers/protobuf).
+//
+// Vendored because APISIX's Lua protobuf compiler ships no well-known types,
+// and the telemetry contract imports Timestamp. Mounted into the gateway at
+// the path its import resolver searches. Comments stripped; schema verbatim.
+
+syntax = "proto3";
+
+package google.protobuf;
+
+option cc_enable_arenas = true;
+option go_package = "google.golang.org/protobuf/types/known/timestamppb";
+option java_package = "com.google.protobuf";
+option java_outer_classname = "TimestampProto";
+option java_multiple_files = true;
+option objc_class_prefix = "GPB";
+option csharp_namespace = "Google.Protobuf.WellKnownTypes";
+
+message Timestamp {
+  int64 seconds = 1;
+
+  int32 nanos = 2;
+}

@@ -149,6 +149,13 @@ data:
   CLICKHOUSE_ADDR: clickhouse:9000
   CLICKHOUSE_DB: maagaparuga
   CLICKHOUSE_USER: maagaparuga
+  # Device authentication. jwt = verify bearer tokens against the issuer's
+  # JWKS (the production setting). The dev overlay currently sets
+  # AUTH_MODE=disabled until the ZITADEL client/service-account bootstrap
+  # lands; the service logs a loud warning whenever it runs that way.
+  OIDC_ISSUER: http://zitadel:8080
+  OIDC_AUDIENCE: telemetry
+  AUTH_MODE: jwt
 ---
 apiVersion: apps/v1
 kind: Deployment

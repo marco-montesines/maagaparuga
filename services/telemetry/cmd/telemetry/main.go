@@ -8,6 +8,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"fmt"
 	"log/slog"
@@ -22,9 +23,11 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/health"
 	healthv1 "google.golang.org/grpc/health/grpc_health_v1"
+	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/reflection"
 
 	telemetryv1 "maagaparuga/services/telemetry/gen/maagaparuga/telemetry/v1"
+	"maagaparuga/services/telemetry/internal/auth"
 	"maagaparuga/services/telemetry/internal/broker"
 	"maagaparuga/services/telemetry/internal/server"
 	"maagaparuga/services/telemetry/internal/simulator"
@@ -74,6 +77,9 @@ func runServe(ctx context.Context, log *slog.Logger, args []string) error {
 	chDB := fs.String("clickhouse-db", env("CLICKHOUSE_DB", "maagaparuga"), "ClickHouse database")
 	chUser := fs.String("clickhouse-user", env("CLICKHOUSE_USER", "maagaparuga"), "ClickHouse user")
 	chPass := fs.String("clickhouse-password", env("CLICKHOUSE_PASSWORD", ""), "ClickHouse password")
+	issuer := fs.String("oidc-issuer", env("OIDC_ISSUER", ""), "ZITADEL issuer URL; device tokens are verified against its JWKS")
+	audience := fs.String("oidc-audience", env("OIDC_AUDIENCE", "telemetry"), "expected token audience")
+	authMode := fs.String("auth", env("AUTH_MODE", "jwt"), "jwt (verify device tokens) or disabled")
 	_ = fs.Parse(args)
 
 	bkr, err := broker.Connect(ctx, *natsURL)
@@ -90,12 +96,17 @@ func runServe(ctx context.Context, log *slog.Logger, args []string) error {
 	}
 	defer st.Close()
 
+	serverOpts, err := authOptions(ctx, log, *authMode, *issuer, *audience)
+	if err != nil {
+		return err
+	}
+
 	listener, err := net.Listen("tcp", *addr)
 	if err != nil {
 		return fmt.Errorf("listen: %w", err)
 	}
 
-	grpcServer := grpc.NewServer()
+	grpcServer := grpc.NewServer(serverOpts...)
 	telemetryv1.RegisterVitalsServiceServer(grpcServer, server.New(bkr, st, log))
 
 	healthServer := health.NewServer()
@@ -107,9 +118,57 @@ func runServe(ctx context.Context, log *slog.Logger, args []string) error {
 		grpcServer.GracefulStop()
 	}()
 
-	log.Info("telemetry serving", "addr", *addr)
+	log.Info("telemetry serving", "addr", *addr, "auth", *authMode)
 
 	return grpcServer.Serve(listener)
+}
+
+// authOptions builds the server's authentication middleware.
+//
+// "jwt" is the only mode that authenticates devices; "disabled" exists for
+// local work before an identity provider is configured and says so loudly,
+// because an unauthenticated ingest endpoint is exactly the anti-pattern this
+// platform was built to avoid.
+func authOptions(
+	ctx context.Context,
+	log *slog.Logger,
+	mode, issuer, audience string,
+) ([]grpc.ServerOption, error) {
+	switch mode {
+	case "disabled":
+		log.Warn("DEVICE AUTHENTICATION DISABLED — every caller may write vitals; " +
+			"set AUTH_MODE=jwt with OIDC_ISSUER for anything but local development")
+
+		return nil, nil
+
+	case "jwt":
+		if issuer == "" {
+			return nil, errors.New("auth=jwt requires OIDC_ISSUER (or -auth=disabled for local work)")
+		}
+
+		verifier, err := auth.NewVerifier(ctx, issuer, audience)
+		if err != nil {
+			return nil, err
+		}
+
+		interceptors := &auth.Interceptors{
+			Verifier: verifier,
+			Log:      log,
+			// Probes carry no credentials.
+			Public: map[string]bool{
+				"/grpc.health.v1.Health/Check": true,
+				"/grpc.health.v1.Health/Watch": true,
+			},
+		}
+
+		return []grpc.ServerOption{
+			grpc.UnaryInterceptor(interceptors.Unary()),
+			grpc.StreamInterceptor(interceptors.Stream()),
+		}, nil
+
+	default:
+		return nil, fmt.Errorf("unknown auth mode %q (want jwt or disabled)", mode)
+	}
 }
 
 func runWrite(ctx context.Context, log *slog.Logger, args []string) error {
@@ -164,6 +223,7 @@ func runSimulate(ctx context.Context, log *slog.Logger, args []string) error {
 	total := fs.Int("total", 0, "stop after N samples (0 = run until interrupted)")
 	burst := fs.Bool("burst", false, "burst mode: sample as fast as possible to demonstrate broker buffering")
 	seed := fs.Uint64("seed", 42, "deterministic seed")
+	token := fs.String("token", env("DEVICE_TOKEN", ""), "bearer token presented as device credentials")
 	_ = fs.Parse(args)
 
 	if *burst {
@@ -175,6 +235,11 @@ func runSimulate(ctx context.Context, log *slog.Logger, args []string) error {
 		return fmt.Errorf("dial telemetry: %w", err)
 	}
 	defer conn.Close()
+
+	// Devices authenticate with a bearer token the same way any client does.
+	if *token != "" {
+		ctx = metadata.AppendToOutgoingContext(ctx, "authorization", "Bearer "+*token)
+	}
 
 	stream, err := telemetryv1.NewVitalsServiceClient(conn).StreamVitals(ctx)
 	if err != nil {

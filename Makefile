@@ -124,6 +124,16 @@ stores-up: ## Data stores only, via Docker Compose (fast iteration while coding 
 stores-down: ## Stop the Compose data stores (volumes preserved)
 	docker compose -f $(COMPOSE_STORES) down
 
+.PHONY: proto-check
+proto-check: ## Fail if the gateway's inlined proto has drifted from proto/
+	@python3 -c "import sys,re; \
+	src=[l for l in open('proto/maagaparuga/telemetry/v1/vitals.proto') if l.strip() and not l.strip().startswith('//')]; \
+	cfg=open('deploy/k8s/base/apisix/apisix.yaml').read(); \
+	inlined=[l.strip() for l in cfg.split('content: |')[1].split('routes:')[0].splitlines() if l.strip()]; \
+	a=[l.strip() for l in src]; \
+	sys.exit(0) if a==inlined else (print('gateway proto is out of sync with proto/ — re-inline it'), sys.exit(1))"
+	@echo "gateway proto in sync"
+
 .PHONY: kustomize-check
 kustomize-check: ## Render all overlays to verify they build
 	kubectl kustomize $(DEV_OVERLAY) > /dev/null && echo "dev overlay: OK"

@@ -15,9 +15,70 @@ data:
     apisix:
       node_listen: 9080
       enable_admin: false
-  # Basic route set — the full configuration (OIDC enforcement, gRPC
-  # transcoding, rate limiting per route, per-env TLS) lands in P5.
+  # Basic route set — the full configuration (OIDC enforcement, rate limiting
+  # per route, per-env TLS) lands in P5.
+  #
+  # `protos` registers the telemetry contract so grpc-transcode can translate
+  # JSON <-> protobuf. It is a copy of proto/maagaparuga/telemetry/v1/
+  # vitals.proto (APISIX standalone reads protos only from this file);
+  # `make proto-check` fails if the two drift apart.
   apisix-routes.yaml: |
+    protos:
+      - id: telemetry
+        content: |
+          syntax = "proto3";
+          package maagaparuga.telemetry.v1;
+          import "google/protobuf/timestamp.proto";
+          option go_package = "maagaparuga/services/telemetry/gen/maagaparuga/telemetry/v1;telemetryv1";
+          enum Consciousness {
+            CONSCIOUSNESS_UNSPECIFIED = 0;
+            CONSCIOUSNESS_ALERT = 1;
+            CONSCIOUSNESS_VOICE = 2;   // responds to voice
+            CONSCIOUSNESS_PAIN = 3;    // responds to pain
+            CONSCIOUSNESS_UNRESPONSIVE = 4;
+          }
+          message VitalsSample {
+            string device_id = 1;
+            string care_recipient_id = 2;
+            google.protobuf.Timestamp measured_at = 3;
+            optional uint32 heart_rate_bpm = 10;
+            optional uint32 respiratory_rate = 11;      // breaths per minute
+            optional double spo2_percent = 12;          // blood oxygen saturation
+            optional double body_temp_c = 13;
+            optional uint32 bp_systolic = 14;           // mmHg
+            optional uint32 bp_diastolic = 15;          // mmHg
+            Consciousness consciousness = 16;
+            optional double skin_resistance_ohms = 20;  // galvanic skin response
+            optional double skin_ph = 21;
+          }
+          message StreamVitalsRequest {
+            VitalsSample sample = 1;
+          }
+          message StreamVitalsResponse {
+            uint64 accepted = 1;
+            uint64 rejected = 2;
+          }
+          message PublishVitalsRequest {
+            VitalsSample sample = 1;
+          }
+          message PublishVitalsResponse {
+            uint64 accepted = 1;
+            uint64 rejected = 2;
+          }
+          message GetWindowRequest {
+            string care_recipient_id = 1;
+            google.protobuf.Timestamp from = 2;
+            google.protobuf.Timestamp to = 3;
+            uint32 limit = 4;   // 0 = server default
+          }
+          message GetWindowResponse {
+            repeated VitalsSample samples = 1;
+          }
+          service VitalsService {
+            rpc StreamVitals(stream StreamVitalsRequest) returns (StreamVitalsResponse);
+            rpc PublishVitals(PublishVitalsRequest) returns (PublishVitalsResponse);
+            rpc GetWindow(GetWindowRequest) returns (GetWindowResponse);
+          }
     routes:
       - uri: /healthz
         upstream:
@@ -29,9 +90,71 @@ data:
             abort:
               http_status: 200
               body: "ok\n"
+      # Telemetry over REST: the gateway transcodes JSON <-> gRPC against the
+      # same service the devices stream to (ADR 0010 — one implementation,
+      # two surfaces).
+      #
+      # KNOWN LIMITATION (2026-07-21): APISIX's bundled Lua protobuf parser
+      # predates proto3 `optional` (legal since protobuf 3.15), so it refuses
+      # this contract and these two routes return 501. The contract keeps
+      # `optional` deliberately — it is what distinguishes "not measured"
+      # from "measured zero" for a vitals reading, and degrading that to
+      # satisfy a gateway plugin would be the wrong trade. The REST surface
+      # is therefore a P5 decision: grpc-gateway (generated, keeps one
+      # implementation) vs waiting on the plugin. Native gRPC below is
+      # unaffected and is what devices use.
+      - uri: /v1/vitals
+        methods: [POST]
+        plugins:
+          grpc-transcode:
+            proto_id: "telemetry"
+            service: maagaparuga.telemetry.v1.VitalsService
+            method: PublishVitals
+        upstream:
+          scheme: grpc
+          nodes:
+            "telemetry:9090": 1
+          type: roundrobin
+      - uri: /v1/vitals/window
+        methods: [GET, POST]
+        plugins:
+          grpc-transcode:
+            proto_id: "telemetry"
+            service: maagaparuga.telemetry.v1.VitalsService
+            method: GetWindow
+        upstream:
+          scheme: grpc
+          nodes:
+            "telemetry:9090": 1
+          type: roundrobin
+
+      # gRPC server reflection, so grpcurl and other tooling can introspect
+      # the service through the gateway (device clients use generated stubs
+      # and do not need this).
+      - uri: /grpc.reflection.v1.ServerReflection/*
+        upstream:
+          scheme: grpc
+          nodes:
+            "telemetry:9090": 1
+          type: roundrobin
+      - uri: /grpc.reflection.v1alpha.ServerReflection/*
+        upstream:
+          scheme: grpc
+          nodes:
+            "telemetry:9090": 1
+          type: roundrobin
+
+      # Native gRPC passthrough for real device clients (streaming ingest
+      # cannot be transcoded — it stays gRPC end to end).
+      - uri: /maagaparuga.telemetry.v1.VitalsService/*
+        upstream:
+          scheme: grpc
+          nodes:
+            "telemetry:9090": 1
+          type: roundrobin
+
       # Everything else -> the web application (Laravel/Octane).
-      # P5 splits this into explicit routes (web, /graphql, telemetry
-      # gRPC + transcode, assessment, media) with per-route policies.
+      # P5 adds per-route policies (OIDC enforcement, rate limits) and TLS.
       - uri: /*
         upstream:
           nodes:
@@ -78,10 +201,18 @@ spec:
             - name: config
               mountPath: /usr/local/apisix/conf/apisix.yaml
               subPath: apisix-routes.yaml
+            # The Lua protobuf compiler resolves imports relative to the
+            # working directory, and the image ships no well-known types.
+            - name: wellknown-protos
+              mountPath: /usr/local/apisix/google/protobuf/timestamp.proto
+              subPath: timestamp.proto
       volumes:
         - name: config
           configMap:
             name: apisix-config
+        - name: wellknown-protos
+          configMap:
+            name: apisix-wellknown-protos
 ---
 apiVersion: v1
 kind: Service

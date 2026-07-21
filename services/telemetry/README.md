@@ -19,6 +19,12 @@ API for the web BFF and the assessment service, and a mock device fleet.
 - **Redelivery is safe.** The `vitals` table is a `ReplacingMergeTree` keyed by
   (care recipient, timestamp, device), so an at-least-once replay replaces its
   twin rather than double-counting.
+- **Device authentication** (ADR 0009): bearer tokens are verified locally
+  against the identity provider's JWKS — signature, issuer, audience and
+  expiry — so ingest costs no network round trip per call and survives key
+  rotation. Health checks are the only exempt methods (probes carry no
+  credentials). `AUTH_MODE=disabled` exists for local work and logs a warning
+  on every start.
 - Style: Effective Go + the [Uber Go style guide](https://github.com/uber-go/guide),
   enforced by `.golangci.yml`.
 
@@ -33,7 +39,22 @@ telemetry simulate   # mock IoMT device fleet -> streams into the ingest API
 ```
 
 Each reads configuration from flags or environment (`NATS_URL`,
-`CLICKHOUSE_ADDR`, `CLICKHOUSE_DB`, `CLICKHOUSE_USER`, `CLICKHOUSE_PASSWORD`).
+`CLICKHOUSE_ADDR`, `CLICKHOUSE_DB`, `CLICKHOUSE_USER`, `CLICKHOUSE_PASSWORD`,
+`OIDC_ISSUER`, `OIDC_AUDIENCE`, `AUTH_MODE`; the simulator takes
+`DEVICE_TOKEN`).
+
+## API surfaces
+
+The same service answers three ways (ADR 0010):
+
+| Surface | Path | Used by |
+|---|---|---|
+| gRPC streaming | `maagaparuga.telemetry.v1.VitalsService/StreamVitals` | devices holding a long-lived connection |
+| REST (transcoded by the gateway) | `POST /v1/vitals`, `GET /v1/vitals/window` | browsers, integrations, curl |
+| gRPC unary | `PublishVitals`, `GetWindow` | services (the web BFF reads windows here) |
+
+The gateway registers this service's `.proto` for JSON↔protobuf transcoding;
+`make proto-check` fails if that copy drifts from `proto/`.
 
 ## Development
 
