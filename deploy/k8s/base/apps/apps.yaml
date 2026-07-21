@@ -139,6 +139,17 @@ spec:
     - name: http
       port: 8080
 ---
+# Shared by telemetry (serve) and telemetry-writer (write).
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: telemetry-config
+data:
+  NATS_URL: nats://nats:4222
+  CLICKHOUSE_ADDR: clickhouse:9000
+  CLICKHOUSE_DB: maagaparuga
+  CLICKHOUSE_USER: maagaparuga
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -157,10 +168,24 @@ spec:
       containers:
         - name: telemetry
           image: ghcr.io/marco-montesines/maagaparuga-telemetry:pinned
-          args: ["serve"]              # gRPC ingest + read API (P3)
+          args: ["serve"]              # gRPC ingest + read API
+          envFrom:
+            - configMapRef:
+                name: telemetry-config
+          env:
+            - name: CLICKHOUSE_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: clickhouse-credentials
+                  key: password
           ports:
             - name: grpc
               containerPort: 9090
+          readinessProbe:
+            tcpSocket:
+              port: grpc
+            initialDelaySeconds: 5
+            periodSeconds: 10
           resources:
             requests:
               cpu: 100m
@@ -197,7 +222,16 @@ spec:
       containers:
         - name: telemetry-writer
           image: ghcr.io/marco-montesines/maagaparuga-telemetry:pinned
-          args: ["write"]              # JetStream consumer -> batched ClickHouse inserts (P3)
+          args: ["write"]              # JetStream consumer -> batched ClickHouse inserts
+          envFrom:
+            - configMapRef:
+                name: telemetry-config
+          env:
+            - name: CLICKHOUSE_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: clickhouse-credentials
+                  key: password
           resources:
             requests:
               cpu: 100m

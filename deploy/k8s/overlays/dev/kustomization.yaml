@@ -61,13 +61,13 @@ generatorOptions:
   disableNameSuffixHash: true   # stable names so base manifests can reference them
 
 patches:
-  # App services scale to 0 until their images exist (web + web-queue enabled
-  # in P2; telemetry + telemetry-writer -> P3, assessment -> P4,
+  # App services scale to 0 until their images exist (web + web-queue and
+  # telemetry + telemetry-writer are live; assessment -> P4,
   # media + media-worker -> P4b).
   - path: patches/apps-scale-zero.yaml
     target:
       kind: Deployment
-      name: ^(telemetry|telemetry-writer|assessment|media|media-worker)$
+      name: ^(assessment|media|media-worker)$
   # Dev runs OpenSearch with the security plugin disabled (no TLS/auth noise
   # locally); cloud overlays enable security with real credentials (P6).
   - path: patches/opensearch-dev.yaml

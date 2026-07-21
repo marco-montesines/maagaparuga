@@ -7,6 +7,7 @@ MINIKUBE_CPUS   ?= 4
 NAMESPACE       := maagaparuga
 DEV_OVERLAY     := deploy/k8s/overlays/dev
 COMPOSE_STORES  := deploy/compose/stores.compose.yml
+TELEMETRY_IMAGE := ghcr.io/marco-montesines/maagaparuga-telemetry:dev
 
 # CloudNativePG operator — pinned release manifest (ADR 0005, 0013).
 CNPG_VERSION  ?= 1.30.0
@@ -69,6 +70,35 @@ dev-expose: ## Port-forward EVERY service to localhost (Ctrl-C stops all)
 	kubectl -n $(NAMESPACE) port-forward svc/zitadel 8080:8080 >/dev/null & \
 	kubectl -n $(NAMESPACE) port-forward svc/openfga 8082:8080 8081:8081 >/dev/null & \
 	wait
+
+.PHONY: dev-simulate
+dev-simulate: ## Stream mock IoMT device vitals into the telemetry service (SAMPLES=n, BURST=1)
+	kubectl -n $(NAMESPACE) run telemetry-sim-$$RANDOM \
+		--rm -i --restart=Never --image=$(TELEMETRY_IMAGE) \
+		-- simulate -target telemetry:9090 -total $(or $(SAMPLES),40) \
+		$(if $(BURST),-burst,-interval 500ms)
+
+.PHONY: dev-smoke
+dev-smoke: ## Post-deploy smoke test: every service answered through its own entry point
+	@echo "== gateway"
+	@kubectl -n $(NAMESPACE) exec deploy/web -- \
+		curl -fsS -m 5 http://apisix:9080/healthz >/dev/null && echo "   APISIX /healthz ok"
+	@echo "== web (PHP)"
+	@kubectl -n $(NAMESPACE) exec deploy/web -- \
+		curl -fsS -m 5 -o /dev/null -w "   /up %{http_code}\n" http://localhost:8080/up
+	@kubectl -n $(NAMESPACE) exec deploy/web -- \
+		curl -fsS -m 5 -o /dev/null -w "   gateway->web %{http_code}\n" http://apisix:9080/up
+	@echo "== telemetry (Go)"
+	@kubectl -n $(NAMESPACE) get deploy/telemetry -o jsonpath='{.status.readyReplicas}' | \
+		grep -q 1 && echo "   ingest ready"
+	@kubectl -n $(NAMESPACE) get deploy/telemetry-writer -o jsonpath='{.status.readyReplicas}' | \
+		grep -q 1 && echo "   writer ready"
+	@echo "== stores"
+	@kubectl -n $(NAMESPACE) exec clickhouse-0 -- \
+		clickhouse-client --user $$CH_USER --password $$CH_PASS \
+		-q "SELECT count() FROM maagaparuga.vitals" 2>/dev/null \
+		| sed 's/^/   vitals rows: /' || echo "   vitals table not created yet"
+	@echo "(assessment + media join this suite in P4/P4b)"
 
 .PHONY: dev-status
 dev-status: ## Show pods, services, and PVCs in the dev cluster
