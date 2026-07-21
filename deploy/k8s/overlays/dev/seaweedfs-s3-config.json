@@ -1,0 +1,14 @@
+{
+  "identities": [
+    {
+      "name": "dev",
+      "credentials": [
+        {
+          "accessKey": "dev-maagaparuga",
+          "secretKey": "dev-seaweedfs-secret"
+        }
+      ],
+      "actions": ["Admin", "Read", "Write", "List", "Tagging"]
+    }
+  ]
+}

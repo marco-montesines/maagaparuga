@@ -1,0 +1,311 @@
+# Application services — deployment shells for the microservices (ADR 0014):
+# independently built, deployed, and scaled containers.
+#
+# The images are built in P2-P4; until then the dev overlay scales all of
+# these to 0 replicas. Probes, env wiring, and ports are finalized alongside
+# each service's implementation phase.
+# In-cluster configuration shared by web + web-queue. Per-env values
+# (FGA store/model ids, ZITADEL client) come from overlays.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: web-config
+data:
+  APP_ENV: production            # Laravel env name; NOT a readiness claim
+  APP_DEBUG: "false"
+  LOG_CHANNEL: stderr
+  DB_CONNECTION: pgsql
+  DB_HOST: maagaparuga-pg-rw
+  DB_PORT: "5432"
+  DB_DATABASE: app
+  DB_USERNAME: app
+  SESSION_DRIVER: redis
+  CACHE_STORE: redis
+  QUEUE_CONNECTION: redis
+  REDIS_CLIENT: predis
+  REDIS_HOST: redis
+  OPENSEARCH_URL: http://opensearch:9200
+  OPENFGA_URL: http://openfga:8080
+  ZITADEL_BASE_URL: http://zitadel:8080
+  AWS_ENDPOINT: http://seaweedfs:8333
+  AWS_BUCKET: attachments
+  AWS_DEFAULT_REGION: garage
+  AWS_USE_PATH_STYLE_ENDPOINT: "true"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: web
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: web
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: web
+        app.kubernetes.io/part-of: maagaparuga
+    spec:
+      enableServiceLinks: false   # same collision class as the ZITADEL_PORT pitfall
+      containers:
+        - name: web
+          image: ghcr.io/marco-montesines/maagaparuga-web:pinned
+          envFrom:
+            - configMapRef:
+                name: web-config
+            - secretRef:
+                name: web-secrets
+          env:
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: maagaparuga-pg-app
+                  key: password
+            - name: REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: redis-credentials
+                  key: password
+          ports:
+            - name: http
+              containerPort: 8080
+          readinessProbe:
+            httpGet:
+              path: /up
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              memory: 512Mi
+---
+# App-internal task queue worker (Laravel queue on Redis — the queue rule):
+# transcription indexing, notifications. Same image, CLI role.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: web-queue
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: web-queue
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: web-queue
+        app.kubernetes.io/part-of: maagaparuga
+    spec:
+      enableServiceLinks: false
+      containers:
+        - name: web-queue
+          image: ghcr.io/marco-montesines/maagaparuga-web:pinned
+          args: ["queue"]
+          envFrom:
+            - configMapRef:
+                name: web-config
+            - secretRef:
+                name: web-secrets
+          env:
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: maagaparuga-pg-app
+                  key: password
+            - name: REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: redis-credentials
+                  key: password
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              memory: 256Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: web
+spec:
+  selector:
+    app.kubernetes.io/name: web
+  ports:
+    - name: http
+      port: 8080
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: telemetry
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: telemetry
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: telemetry
+        app.kubernetes.io/part-of: maagaparuga
+    spec:
+      containers:
+        - name: telemetry
+          image: ghcr.io/marco-montesines/maagaparuga-telemetry:pinned
+          args: ["serve"]              # gRPC ingest + read API (P3)
+          ports:
+            - name: grpc
+              containerPort: 9090
+          resources:
+            requests:
+              cpu: 100m
+              memory: 64Mi
+            limits:
+              memory: 128Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: telemetry
+spec:
+  selector:
+    app.kubernetes.io/name: telemetry
+  ports:
+    - name: grpc
+      port: 9090
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: telemetry-writer
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: telemetry-writer
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: telemetry-writer
+        app.kubernetes.io/part-of: maagaparuga
+    spec:
+      containers:
+        - name: telemetry-writer
+          image: ghcr.io/marco-montesines/maagaparuga-telemetry:pinned
+          args: ["write"]              # JetStream consumer -> batched ClickHouse inserts (P3)
+          resources:
+            requests:
+              cpu: 100m
+              memory: 64Mi
+            limits:
+              memory: 128Mi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: assessment
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: assessment
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: assessment
+        app.kubernetes.io/part-of: maagaparuga
+    spec:
+      containers:
+        - name: assessment
+          image: ghcr.io/marco-montesines/maagaparuga-assessment:pinned
+          ports:
+            - name: http
+              containerPort: 8000
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              memory: 256Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: assessment
+spec:
+  selector:
+    app.kubernetes.io/name: assessment
+  ports:
+    - name: http
+      port: 8000
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: media
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: media
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: media
+        app.kubernetes.io/part-of: maagaparuga
+    spec:
+      containers:
+        - name: media
+          image: ghcr.io/marco-montesines/maagaparuga-media:pinned
+          args: ["api"]                # upload intake + catalog + search API (P4b)
+          ports:
+            - name: http
+              containerPort: 8000
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              memory: 512Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: media
+spec:
+  selector:
+    app.kubernetes.io/name: media
+  ports:
+    - name: http
+      port: 8000
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: media-worker
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: media-worker
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: media-worker
+        app.kubernetes.io/part-of: maagaparuga
+    spec:
+      containers:
+        - name: media-worker
+          image: ghcr.io/marco-montesines/maagaparuga-media:pinned
+          args: ["worker"]             # JetStream consumer: FFmpeg -> faster-whisper -> embeddings (P4b)
+          resources:
+            requests:
+              cpu: 200m
+              memory: 512Mi
+            limits:
+              memory: 1Gi

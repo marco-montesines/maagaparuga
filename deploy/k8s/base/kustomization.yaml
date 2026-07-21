@@ -1,0 +1,49 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: maagaparuga
+
+resources:
+  - namespace.yaml
+  - postgres/cluster.yaml
+  - clickhouse/clickhouse.yaml
+  - opensearch/opensearch.yaml
+  - redis/redis.yaml
+  - seaweedfs/seaweedfs.yaml
+  - nats/nats.yaml
+  - zitadel/zitadel.yaml
+  - openfga/openfga.yaml
+  - apisix/apisix.yaml
+  - apps/apps.yaml
+
+# Version policy (ADR 0013): every image pinned to an exact current stable
+# release, bumped by automated dependency updates. Manifests use the tag
+# `pinned`; the real versions live here, in exactly one place.
+images:
+  - name: clickhouse/clickhouse-server
+    newTag: 26.6.1.1193          # latest stable series (LTS alternative: 26.3.x)
+  - name: opensearchproject/opensearch
+    newTag: 3.7.0
+  - name: redis
+    newTag: 8.8.0-alpine
+  - name: chrislusf/seaweedfs
+    newTag: "4.40"   # object store (ADR 0015 — MinIO community edition is discontinued)
+  - name: nats
+    newTag: 2.14.3-alpine
+  - name: ghcr.io/zitadel/zitadel
+    newTag: v4.16.1
+  - name: openfga/openfga
+    newTag: v1.18.1
+  - name: apache/apisix
+    newTag: 3.17.0-debian
+  - name: busybox
+    newTag: 1.38.0
+  # Application images are built from this repository (P2-P4).
+  - name: ghcr.io/marco-montesines/maagaparuga-web
+    newTag: dev
+  - name: ghcr.io/marco-montesines/maagaparuga-telemetry
+    newTag: dev
+  - name: ghcr.io/marco-montesines/maagaparuga-assessment
+    newTag: dev
+  - name: ghcr.io/marco-montesines/maagaparuga-media
+    newTag: dev

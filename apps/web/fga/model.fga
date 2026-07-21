@@ -1,0 +1,23 @@
+model
+  schema 1.1
+
+# MaagapAruga authorization model (ADR 0009).
+# The relationship data ("tuples") mirrors care_team_assignments rows —
+# the database row is the source of truth, the FGA tuple is the enforcement
+# copy, kept in sync by the CareTeamAssignment observer.
+
+type user
+
+type care_recipient
+  relations
+    # The care recipient's own account, if they have one.
+    define owner: [user]
+
+    # Any staff member assigned via care_team_assignments.
+    define assigned_staff: [user]
+
+    # Who may read the record.
+    define viewer: assigned_staff or owner
+
+    # Who may write clinical content (notes, consultations) — staff only.
+    define editor: assigned_staff

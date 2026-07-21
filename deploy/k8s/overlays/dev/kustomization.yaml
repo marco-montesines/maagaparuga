@@ -1,0 +1,78 @@
+# Dev overlay — minikube (`make dev`).
+#
+# DEV-ONLY CREDENTIALS: the generated secrets below are well-known local
+# values for a throwaway minikube cluster. They are NOT secrets and are NEVER
+# used in staging/production — cloud overlays get real secret provisioning in
+# P6. This is mock infrastructure for a research/educational platform.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: maagaparuga   # must be repeated here so GENERATED secrets land in it too
+
+resources:
+  - ../../base
+
+secretGenerator:
+  - name: pg-zitadel-credentials
+    type: kubernetes.io/basic-auth
+    literals:
+      - username=zitadel
+      - password=dev-zitadel-pw
+  - name: pg-openfga-credentials
+    type: kubernetes.io/basic-auth
+    literals:
+      - username=openfga
+      - password=dev-openfga-pw
+  - name: openfga-datastore
+    literals:
+      - uri=postgres://openfga:dev-openfga-pw@maagaparuga-pg-rw:5432/openfga?sslmode=disable
+  - name: clickhouse-credentials
+    literals:
+      - username=maagaparuga
+      - password=dev-clickhouse-pw
+  - name: opensearch-credentials
+    literals:
+      # The image requires a strong-looking initial admin password even when
+      # the security plugin is disabled for dev (see patch below).
+      - admin-password=Dev-Opensearch-Pw1!
+  - name: redis-credentials
+    literals:
+      - password=dev-redis-pw
+  - name: seaweedfs-s3-config
+    files:
+      - s3-config.json=seaweedfs-s3-config.json
+  - name: zitadel-masterkey
+    literals:
+      # ZITADEL requires exactly 32 bytes.
+      - masterkey=DevOnlyMasterkeyDevOnlyMasterkey
+  - name: web-secrets
+    literals:
+      # Laravel APP_KEY: base64 of 32 bytes — dev-only, well-known.
+      - APP_KEY=base64:ZGV2LWtleS1kZXYta2V5LWRldi1rZXktZGV2LWtleS0=
+      # Set after `php artisan fga:bootstrap` (empty = authz fails closed).
+      - OPENFGA_STORE_ID=
+      - OPENFGA_MODEL_ID=
+      # Set after the ZITADEL client is registered (P2 follow-up).
+      - ZITADEL_CLIENT_ID=
+      - ZITADEL_CLIENT_SECRET=
+      - ZITADEL_REDIRECT_URI=http://localhost:9080/auth/callback
+
+generatorOptions:
+  disableNameSuffixHash: true   # stable names so base manifests can reference them
+
+patches:
+  # App services scale to 0 until their images exist (web + web-queue enabled
+  # in P2; telemetry + telemetry-writer -> P3, assessment -> P4,
+  # media + media-worker -> P4b).
+  - path: patches/apps-scale-zero.yaml
+    target:
+      kind: Deployment
+      name: ^(telemetry|telemetry-writer|assessment|media|media-worker)$
+  # Dev runs OpenSearch with the security plugin disabled (no TLS/auth noise
+  # locally); cloud overlays enable security with real credentials (P6).
+  - path: patches/opensearch-dev.yaml
+  # Expose the gateway and a few consoles on stable NodePorts for the host.
+  - path: patches/nodeports.yaml
+    target:
+      kind: Service
+      name: apisix

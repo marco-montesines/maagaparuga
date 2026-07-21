@@ -1,0 +1,8 @@
+# Stable NodePort for the gateway: everything enters through APISIX,
+# reachable from the host at $(minikube ip):30080.
+- op: replace
+  path: /spec/type
+  value: NodePort
+- op: add
+  path: /spec/ports/0/nodePort
+  value: 30080

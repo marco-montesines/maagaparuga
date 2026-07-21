@@ -1,0 +1,128 @@
+"MaagapAruga GraphQL BFF (ADR 0010): aggregation across polyglot services.
+One dashboard query returns the care record (PostgreSQL), the latest vitals
+window (telemetry service — gRPC in P3, faked until then), assessment results
+(PostgreSQL, written by the assessment service), and media search hits
+(OpenSearch hybrid in P4b, faked until then)."
+
+scalar DateTime @scalar(class: "Nuwave\\Lighthouse\\Schema\\Types\\Scalars\\DateTime")
+
+type Query {
+    me: User @guard @auth
+
+    careRecipient(id: ID! @eq): CareRecipient
+        @guard
+        @can(ability: "view", find: "id")
+        @find
+
+    "The BFF aggregate: everything a care-team dashboard needs in one round trip."
+    dashboard(careRecipientId: ID!): Dashboard
+        @guard
+        @field(resolver: "App\\GraphQL\\Queries\\DashboardQuery")
+
+    "Hybrid (keyword + semantic) search over transcribed media (P4b backend)."
+    mediaSearch(careRecipientId: ID!, query: String!): [MediaHit!]!
+        @guard
+        @field(resolver: "App\\GraphQL\\Queries\\MediaSearchQuery")
+}
+
+type Dashboard {
+    recipient: CareRecipient!
+    vitalsWindow: [VitalsSample!]!
+    latestAssessments: [AssessmentResult!]!
+    openAlerts: [Alert!]!
+}
+
+type User {
+    id: ID!
+    name: String!
+    email: String
+    role: String!
+}
+
+type CareRecipient {
+    id: ID!
+    name: String!
+    birthdate: DateTime
+    careContext: String! @rename(attribute: "care_context")
+    medicalInfo: GeneralMedicalInfo @hasOne
+    consultations: [Consultation!]! @hasMany
+    questionnaireResponses: [QuestionnaireResponse!]! @hasMany
+}
+
+type GeneralMedicalInfo {
+    bloodType: String @rename(attribute: "blood_type")
+    heightCm: Float @rename(attribute: "height_cm")
+    weightKg: Float @rename(attribute: "weight_kg")
+    allergies: String
+    familyHistory: String @rename(attribute: "family_history")
+    lastVisitAt: DateTime @rename(attribute: "last_visit_at")
+}
+
+type Consultation {
+    id: ID!
+    consultedAt: DateTime! @rename(attribute: "consulted_at")
+    staff: User! @belongsTo
+    chiefComplaint: String @rename(attribute: "chief_complaint")
+    diagnosis: String
+    treatment: String
+    prescription: String
+    attachments: [ConsultationAttachment!]! @hasMany
+    transcriptions: [Transcription!]! @hasMany
+}
+
+type ConsultationAttachment {
+    id: ID!
+    kind: String!
+    objectKey: String! @rename(attribute: "object_key")
+    caption: String
+}
+
+type Transcription {
+    id: ID!
+    body: String!
+    author: User! @belongsTo
+}
+
+type QuestionnaireResponse {
+    id: ID!
+    instrument: String!
+    submittedAt: DateTime! @rename(attribute: "submitted_at")
+}
+
+"A point-in-time vitals sample from the telemetry service's windowed read API."
+type VitalsSample {
+    measuredAt: DateTime!
+    heartRateBpm: Int
+    spo2Percent: Float
+    bpSystolic: Int
+    bpDiastolic: Int
+    temperatureC: Float
+    respiratoryRate: Int
+}
+
+type AssessmentResult {
+    id: ID!
+    scoreType: String! @rename(attribute: "score_type")
+    value: Float
+    riskLevel: String @rename(attribute: "risk_level")
+    computedAt: DateTime! @rename(attribute: "computed_at")
+}
+
+type Alert {
+    id: ID!
+    severity: String!
+    title: String!
+    body: String
+    acknowledgedAt: DateTime @rename(attribute: "acknowledged_at")
+    createdAt: DateTime! @rename(attribute: "created_at")
+}
+
+"A search hit pointing back into the exact media timestamp."
+type MediaHit {
+    mediaId: String!
+    objectKey: String!
+    startMs: Int!
+    endMs: Int!
+    snippet: String!
+    score: Float!
+}

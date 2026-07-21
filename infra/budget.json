@@ -1,0 +1,17 @@
+{
+  "currency": "EUR",
+  "monthly_budget": {
+    "staging": 15.0,
+    "production": 25.0
+  },
+  "warn_at_percent": 80,
+  "allowed_server_types": ["cx22", "cx32", "cx42"],
+  "required_labels": ["environment", "project"],
+  "notes": [
+    "FinOps guardrail consumed by tools/cost-guard in CI.",
+    "Budgets are gross EUR per month per environment.",
+    "A plan whose projected monthly cost exceeds the budget FAILS the pipeline.",
+    "allowed_server_types blocks accidental provisioning of large instances.",
+    "Staging is ephemeral (terragrunt destroy after verification) - its budget assumes part-time use."
+  ]
+}

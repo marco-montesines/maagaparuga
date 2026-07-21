@@ -1,0 +1,130 @@
+# SeaweedFS — S3-compatible object storage (ADR 0015, replacing the
+# discontinued MinIO community edition): media originals, attachments, raw
+# telemetry archive, Tempo trace storage. The S3 seam is unchanged — clients
+# only know endpoint + credentials, which is what made this swap a config
+# change, not a redesign.
+#
+# Single-binary all-in-one mode (`weed server -s3`: master + volume + filer +
+# S3 in one process) for single-node environments; the cluster overlay splits
+# roles and adds replication.
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: seaweedfs
+spec:
+  serviceName: seaweedfs
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: seaweedfs
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: seaweedfs
+        app.kubernetes.io/part-of: maagaparuga
+    spec:
+      containers:
+        - name: seaweedfs
+          image: chrislusf/seaweedfs:pinned
+          args:
+            - server
+            - -dir=/data
+            - -s3
+            - -s3.port=8333
+            - -s3.config=/etc/seaweedfs/s3-config.json
+            - -master.volumeSizeLimitMB=512
+          ports:
+            - name: s3
+              containerPort: 8333
+            - name: master
+              containerPort: 9333
+            - name: volume
+              containerPort: 8080
+            - name: filer
+              containerPort: 8888
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              memory: 512Mi
+          readinessProbe:
+            httpGet:
+              path: /cluster/status
+              port: master
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          volumeMounts:
+            - name: data
+              mountPath: /data
+            - name: s3-config
+              mountPath: /etc/seaweedfs
+              readOnly: true
+      volumes:
+        - name: s3-config
+          secret:
+            secretName: seaweedfs-s3-config
+            defaultMode: 0444  # weed runs non-root; file only visible inside the pod
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 5Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: seaweedfs
+spec:
+  selector:
+    app.kubernetes.io/name: seaweedfs
+  ports:
+    - name: s3
+      port: 8333
+    - name: master
+      port: 9333
+    - name: volume
+      port: 8080
+    - name: filer
+      port: 8888
+---
+# One-shot bootstrap: create the claim-check buckets via weed shell.
+# Idempotent — bucket.create on an existing bucket is a no-op error we tolerate.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: seaweedfs-buckets
+spec:
+  backoffLimit: 6
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: seaweedfs-buckets
+        app.kubernetes.io/part-of: maagaparuga
+    spec:
+      restartPolicy: OnFailure
+      containers:
+        - name: buckets
+          image: chrislusf/seaweedfs:pinned
+          command:
+            - /bin/sh
+            - -c
+            - |
+              set -e
+              # weed shell no-ops piped commands unless the session ends with an
+              # explicit `exit` — run everything in one scripted session.
+              echo "waiting for master..."
+              until printf "cluster.check\nexit\n" | timeout 10 weed shell -master=seaweedfs:9333 >/dev/null 2>&1; do
+                echo "still waiting..."; sleep 2
+              done
+              printf 's3.bucket.create -name media\ns3.bucket.create -name attachments\ns3.bucket.create -name telemetry-archive\ns3.bucket.create -name tempo-traces\ns3.bucket.list\nexit\n' \
+                | timeout 60 weed shell -master=seaweedfs:9333
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              memory: 128Mi

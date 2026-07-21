@@ -1,0 +1,52 @@
+# PostgreSQL via the CloudNativePG operator (ADR 0005).
+# One instance by default; the cluster overlay raises `instances` to 2
+# (primary + streaming replica with automated failover).
+#
+# CNPG auto-creates the `maagaparuga-pg-app` secret (user `app`, db `app`)
+# used by the application services. ZITADEL and OpenFGA get their own roles
+# and databases below; their passwords come from per-overlay secrets
+# (dev: generated literals, cloud: provisioned in P6).
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: maagaparuga-pg
+spec:
+  instances: 1
+  # Pinned here (not in kustomization images:) because this is a CR field,
+  # not a pod template. ADR 0013: exact pin, auto-refreshed.
+  imageName: ghcr.io/cloudnative-pg/postgresql:18.4
+  storage:
+    size: 2Gi
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      memory: 512Mi
+  bootstrap:
+    initdb:
+      database: app
+      owner: app
+  managed:
+    roles:
+      - name: zitadel
+        ensure: present
+        login: true
+        createdb: true   # ZITADEL's init phase creates + owns its database itself
+        passwordSecret:
+          name: pg-zitadel-credentials
+      - name: openfga
+        ensure: present
+        login: true
+        passwordSecret:
+          name: pg-openfga-credentials
+---
+apiVersion: postgresql.cnpg.io/v1
+kind: Database
+metadata:
+  name: maagaparuga-pg-openfga
+spec:
+  name: openfga
+  owner: openfga
+  cluster:
+    name: maagaparuga-pg
