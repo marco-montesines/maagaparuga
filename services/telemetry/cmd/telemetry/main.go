@@ -11,6 +11,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"log/slog"
 	"net"
 	"os"
@@ -32,6 +33,7 @@ import (
 	"maagaparuga/services/telemetry/internal/server"
 	"maagaparuga/services/telemetry/internal/simulator"
 	"maagaparuga/services/telemetry/internal/store"
+	"maagaparuga/services/telemetry/internal/vitals"
 )
 
 func main() {
@@ -204,11 +206,33 @@ func runWrite(ctx context.Context, log *slog.Logger, args []string) error {
 
 	return bkr.Consume(ctx, *batchSize, *maxWait,
 		func(ctx context.Context, batch []*telemetryv1.VitalsSample) error {
-			if err := st.InsertBatch(ctx, batch); err != nil {
+			// Defence in depth: the ingest API validates, but this consumer
+			// must not assume it is the only publisher to the stream. An
+			// implausible value dropped here is a logged anomaly; the same
+			// value written to the store would become a clinical number
+			// somebody later reads as real.
+			accepted := batch[:0]
+
+			for _, sample := range batch {
+				if err := vitals.Validate(sample, time.Now()); err != nil {
+					log.WarnContext(ctx, "dropped invalid sample from stream",
+						"device_id", sample.GetDeviceId(), "error", err)
+
+					continue
+				}
+
+				accepted = append(accepted, sample)
+			}
+
+			if len(accepted) == 0 {
+				return nil
+			}
+
+			if err := st.InsertBatch(ctx, accepted); err != nil {
 				return err
 			}
 
-			log.Info("batch written", "samples", len(batch))
+			log.Info("batch written", "samples", len(accepted), "dropped", len(batch)-len(accepted))
 
 			return nil
 		})
@@ -254,13 +278,24 @@ func runSimulate(ctx context.Context, log *slog.Logger, args []string) error {
 	err = fleet.Run(ctx, *interval, *total, func(sample *telemetryv1.VitalsSample) error {
 		return stream.Send(&telemetryv1.StreamVitalsRequest{Sample: sample})
 	})
-	if err != nil {
-		return err
+	// Send returns io.EOF when the server has closed the stream; the real
+	// status (e.g. Unauthenticated) is only available from CloseAndRecv. So a
+	// non-EOF Send error is a local/transport failure, but on EOF we must fall
+	// through to CloseAndRecv rather than report a bare "EOF".
+	if err != nil && !errors.Is(err, io.EOF) {
+		return fmt.Errorf("send: %w", err)
+	}
+
+	// A cancelled context is a clean stop, not a stream error.
+	if ctx.Err() != nil {
+		log.Info("simulation stopped")
+
+		return nil
 	}
 
 	reply, err := stream.CloseAndRecv()
 	if err != nil {
-		return fmt.Errorf("close stream: %w", err)
+		return fmt.Errorf("stream closed by server: %w", err)
 	}
 
 	log.Info("simulation finished", "accepted", reply.GetAccepted(), "rejected", reply.GetRejected())

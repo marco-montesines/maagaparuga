@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Enums\Role;
 use App\Models\User;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Laravel\Socialite\Facades\Socialite;
 
@@ -22,21 +23,38 @@ class AuthController extends Controller
         return Socialite::driver('zitadel')->redirect();
     }
 
-    public function callback(): RedirectResponse
+    public function callback(Request $request): RedirectResponse
     {
         $oidcUser = Socialite::driver('zitadel')->user();
 
         $claims = $oidcUser->user ?? [];
-        $role = $this->roleFromClaims($claims[self::ROLES_CLAIM] ?? []);
+        $subject = $oidcUser->getId();
+        $email = $oidcUser->getEmail();
 
-        $user = User::updateOrCreate(
-            ['zitadel_sub' => $oidcUser->getId()],
-            [
-                'name' => $oidcUser->getName() ?? $oidcUser->getNickname() ?? 'Unknown',
-                'email' => $oidcUser->getEmail(),
-                'role' => $role,
-            ],
-        );
+        // Match an existing account by OIDC subject first, then by email so a
+        // seeded persona (created with an email but no subject yet) is claimed
+        // on first login instead of colliding on the unique email and 500ing.
+        $user = User::firstWhere('zitadel_sub', $subject)
+            ?? ($email !== null ? User::firstWhere('email', $email) : null)
+            ?? new User;
+
+        $user->zitadel_sub = $subject;
+        $user->name = $oidcUser->getName() ?? $oidcUser->getNickname() ?? $user->name ?? 'Unknown';
+        if ($email !== null) {
+            $user->email = $email;
+        }
+        // Only apply a role the identity provider actually asserted. A missing
+        // or unparseable roles claim must not silently demote an existing
+        // administrator to care recipient (least privilege applies to NEW
+        // accounts, not to overwriting a known one).
+        $assertedRole = $this->roleFromClaims($claims[self::ROLES_CLAIM] ?? [], $user->exists);
+        if ($assertedRole !== null) {
+            $user->role = $assertedRole;
+        }
+        $user->save();
+
+        // Prevent session fixation: adopt a fresh session id at login.
+        $request->session()->regenerate();
 
         Auth::login($user, remember: true);
 
@@ -58,10 +76,14 @@ class AuthController extends Controller
 
     /**
      * ZITADEL project-roles claim -> local Role. The claim maps role keys to
-     * org grants; role keys are our Role enum values. Least-privilege default:
-     * an authenticated user with no recognized role is a care recipient.
+     * org grants; role keys are our Role enum values.
+     *
+     * Returns null when the claim asserts no recognized role. For a NEW
+     * account the caller substitutes the least-privilege default (care
+     * recipient); for an EXISTING account null means "leave the stored role
+     * untouched" so a claim hiccup can't demote staff.
      */
-    private function roleFromClaims(array $rolesClaim): Role
+    private function roleFromClaims(array $rolesClaim, bool $userExists): ?Role
     {
         foreach (Role::cases() as $role) {
             if (array_key_exists($role->value, $rolesClaim)) {
@@ -69,6 +91,6 @@ class AuthController extends Controller
             }
         }
 
-        return Role::CareRecipient;
+        return $userExists ? null : Role::CareRecipient;
     }
 }

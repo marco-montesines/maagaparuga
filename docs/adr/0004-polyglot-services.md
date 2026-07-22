@@ -4,15 +4,17 @@ Date: 2026-07-20 · Status: **Accepted**
 
 ## Context
 
-A multi-language platform is only credible if every language is where it is for a
-reason — polyglot-for-its-own-sake reads as résumé-driven engineering.
+A multi-language platform is only justified if every language is where it is for a
+reason. Each runtime carries a real operational cost — a toolchain, a base image, a
+memory footprint, a security surface — so adding one has to pay for itself in fitness
+for its workload; otherwise the simpler single-language choice wins.
 
 ## Options considered
 
-- **Single language for everything** — operationally simplest; rejected: no language is
-  best at all three jobs (high-frequency ingest, scientific scoring + media ML, and
-  product-surface CRUD), and the platform exists to demonstrate the judgment of
-  matching tools to workloads.
+- **Single language for everything** — operationally simplest, one toolchain; rejected:
+  no single language is best at all three jobs (high-frequency ingest, scientific
+  scoring + media ML, and product-surface CRUD), so a monoglot stack would pay in
+  wasted resources or slower delivery on two of the three.
 - **Per-service assignment by strength** ✅:
   - **Go** — telemetry ingest/read: throughput, concurrency, first-class gRPC.
   - **Python** — assessment (scikit-fuzzy, scoring) and media (FFmpeg tooling,
@@ -37,6 +39,7 @@ and lint lane in CI.
 
 ## Consequences
 
-- Three toolchains to maintain; accepted deliberately as part of the demonstration.
+- Three toolchains to maintain; accepted deliberately because each earns its place by
+  fitting its workload better than a shared language would.
 - Cross-language concerns (tracing, auth, contracts) must use open standards —
   OpenTelemetry, OIDC/JWT, protobuf (see ADR 0010, 0011).

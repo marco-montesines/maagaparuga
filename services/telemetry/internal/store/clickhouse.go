@@ -6,6 +6,7 @@ package store
 import (
 	"context"
 	"fmt"
+	"math"
 	"time"
 
 	"github.com/ClickHouse/clickhouse-go/v2"
@@ -215,12 +216,22 @@ LIMIT ?`
 // The proto uses uint32/double; ClickHouse columns are UInt16/Float32.
 // These helpers convert without losing the "not measured" distinction.
 
+// nullableU16 narrows a validated measurement. Validation bounds every
+// integer vital far below 65535, so this cannot lose data for a sample that
+// passed it — but an unchecked conversion would WRAP silently (65536 becomes
+// 0, a heart rate of zero), so out-of-range input is clamped and reported
+// rather than quietly corrupted.
 func nullableU16(v *uint32) *uint16 {
 	if v == nil {
 		return nil
 	}
 
-	narrowed := uint16(*v)
+	value := *v
+	if value > math.MaxUint16 {
+		value = math.MaxUint16
+	}
+
+	narrowed := uint16(value)
 
 	return &narrowed
 }

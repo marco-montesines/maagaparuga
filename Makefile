@@ -2,6 +2,8 @@
 # `make dev` brings up the full platform on minikube (P1 scope: data layer,
 # broker, identity stack, gateway; app services activate as P2-P4 land).
 
+BUF ?= $(shell command -v buf 2>/dev/null || echo $(HOME)/go/bin/buf)
+
 MINIKUBE_MEMORY ?= 7g
 MINIKUBE_CPUS   ?= 4
 NAMESPACE       := maagaparuga
@@ -124,15 +126,24 @@ stores-up: ## Data stores only, via Docker Compose (fast iteration while coding 
 stores-down: ## Stop the Compose data stores (volumes preserved)
 	docker compose -f $(COMPOSE_STORES) down
 
+.PHONY: gateway-proto
+gateway-proto: ## Regenerate the gateway's compiled descriptor set from proto/
+	@cd proto && $(BUF) build -o /tmp/maagaparuga-descriptors.pb
+	@python3 -c "import base64,pathlib,re; \
+	b64=base64.b64encode(pathlib.Path('/tmp/maagaparuga-descriptors.pb').read_bytes()).decode(); \
+	p=pathlib.Path('deploy/k8s/base/apisix/apisix.yaml'); s=p.read_text(); \
+	s=re.sub(r'(?<=        content: \")[A-Za-z0-9+/=]+(?=\")', b64, s); \
+	p.write_text(s); print('gateway descriptor set updated')"
+
 .PHONY: proto-check
-proto-check: ## Fail if the gateway's inlined proto has drifted from proto/
-	@python3 -c "import sys,re; \
-	src=[l for l in open('proto/maagaparuga/telemetry/v1/vitals.proto') if l.strip() and not l.strip().startswith('//')]; \
-	cfg=open('deploy/k8s/base/apisix/apisix.yaml').read(); \
-	inlined=[l.strip() for l in cfg.split('content: |')[1].split('routes:')[0].splitlines() if l.strip()]; \
-	a=[l.strip() for l in src]; \
-	sys.exit(0) if a==inlined else (print('gateway proto is out of sync with proto/ — re-inline it'), sys.exit(1))"
-	@echo "gateway proto in sync"
+proto-check: ## Fail if the gateway's descriptor set is stale relative to proto/
+	@cd proto && $(BUF) build -o /tmp/maagaparuga-check.pb
+	@python3 -c "import base64,pathlib,re,sys; \
+	want=base64.b64encode(pathlib.Path('/tmp/maagaparuga-check.pb').read_bytes()).decode(); \
+	s=pathlib.Path('deploy/k8s/base/apisix/apisix.yaml').read_text(); \
+	m=re.search(r'(?<=        content: \")[A-Za-z0-9+/=]+(?=\")', s); \
+	sys.exit(0) if m and m.group(0)==want else (print('gateway descriptor set is stale -- run: make gateway-proto'), sys.exit(1))"
+	@echo "gateway descriptor set in sync"
 
 .PHONY: kustomize-check
 kustomize-check: ## Render all overlays to verify they build

@@ -3,13 +3,6 @@ kind: Kustomization
 
 namespace: maagaparuga
 
-configMapGenerator:
-  - name: apisix-wellknown-protos
-    files:
-      - apisix/wellknown/timestamp.proto
-    options:
-      disableNameSuffixHash: true
-
 resources:
   - namespace.yaml
   - postgres/cluster.yaml

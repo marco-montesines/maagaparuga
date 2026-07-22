@@ -29,12 +29,19 @@ class AlertController extends Controller
 
     public function acknowledge(Alert $alert): RedirectResponse
     {
-        Gate::authorize('view', $alert->careRecipient);
+        // Acknowledging is a staff write, not a read — 'update' additionally
+        // requires isStaff(), so a care recipient cannot clear their own alert
+        // out of the care team's inbox.
+        Gate::authorize('update', $alert->careRecipient);
 
-        $alert->forceFill([
-            'acknowledged_by' => auth()->id(),
-            'acknowledged_at' => now(),
-        ])->save();
+        // Idempotent: the first acknowledgement stands; re-posting does not
+        // reassign who acknowledged it.
+        if ($alert->acknowledged_at === null) {
+            $alert->forceFill([
+                'acknowledged_by' => auth()->id(),
+                'acknowledged_at' => now(),
+            ])->save();
+        }
 
         return back()->with('status', 'Alert acknowledged.');
     }

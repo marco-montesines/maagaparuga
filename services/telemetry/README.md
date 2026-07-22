@@ -50,11 +50,22 @@ The same service answers three ways (ADR 0010):
 | Surface | Path | Used by |
 |---|---|---|
 | gRPC streaming | `maagaparuga.telemetry.v1.VitalsService/StreamVitals` | devices holding a long-lived connection |
-| REST (transcoded by the gateway) | `POST /v1/vitals`, `GET /v1/vitals/window` | browsers, integrations, curl |
+| REST (transcoded by the gateway) | `POST /v1/vitals`, `POST /v1/vitals/window` | browsers, integrations, curl |
 | gRPC unary | `PublishVitals`, `GetWindow` | services (the web BFF reads windows here) |
 
-The gateway registers this service's `.proto` for JSON↔protobuf transcoding;
-`make proto-check` fails if that copy drifts from `proto/`.
+The gateway transcodes REST↔gRPC from a **compiled descriptor set** generated
+from `proto/` (`make gateway-proto`; `make proto-check` fails if it is stale).
+Two things to know when calling the REST surface: it uses protobuf's table
+mapping rather than canonical protobuf JSON, so timestamps are
+`{"seconds":N,"nanos":N}` in both directions, and responses carry a
+`"_field":"field"` marker for each present optional field (a presence
+indicator, not data).
+
+```bash
+curl -X POST http://<gateway>/v1/vitals -H 'Content-Type: application/json' \
+  -d '{"sample":{"device_id":"d1","care_recipient_id":"1",
+       "measured_at":{"seconds":1784664365,"nanos":0},"heart_rate_bpm":72}}'
+```
 
 ## Development
 

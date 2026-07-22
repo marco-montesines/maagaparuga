@@ -5,6 +5,7 @@ package vitals
 import (
 	"errors"
 	"fmt"
+	"math"
 	"time"
 
 	telemetryv1 "maagaparuga/services/telemetry/gen/maagaparuga/telemetry/v1"
@@ -21,6 +22,8 @@ const (
 	minTempC, maxTempC         = 20.0, 45.0
 	minSystolic, maxSystolic   = 40, 300
 	minDiastolic, maxDiastolic = 20, 200
+	minSkinOhms, maxSkinOhms   = 1.0, 10_000_000.0
+	minSkinPH, maxSkinPH       = 3.0, 9.0
 	maxClockSkew               = 5 * time.Minute
 	maxSampleAge               = 24 * time.Hour
 )
@@ -32,6 +35,7 @@ var (
 	ErrNoMeasurements  = errors.New("sample carries no measurements")
 	ErrFutureTimestamp = errors.New("measured_at is too far in the future")
 	ErrStaleTimestamp  = errors.New("measured_at is too far in the past")
+	ErrNotFinite       = errors.New("measurement is not a finite number")
 )
 
 // Validate reports whether a sample may enter the pipeline.
@@ -72,14 +76,14 @@ func Validate(s *telemetryv1.VitalsSample, now time.Time) error {
 		measurements++
 	}
 	if v := s.Spo2Percent; v != nil {
-		if *v < minSpO2 || *v > maxSpO2 {
-			return rangeErr("spo2_percent", *v, minSpO2, maxSpO2)
+		if err := checkFloat("spo2_percent", *v, minSpO2, maxSpO2); err != nil {
+			return err
 		}
 		measurements++
 	}
 	if v := s.BodyTempC; v != nil {
-		if *v < minTempC || *v > maxTempC {
-			return rangeErr("body_temp_c", *v, minTempC, maxTempC)
+		if err := checkFloat("body_temp_c", *v, minTempC, maxTempC); err != nil {
+			return err
 		}
 		measurements++
 	}
@@ -99,10 +103,16 @@ func Validate(s *telemetryv1.VitalsSample, now time.Time) error {
 		return fmt.Errorf("bp_diastolic (%d) must be below bp_systolic (%d)",
 			*s.BpDiastolic, *s.BpSystolic)
 	}
-	if s.SkinResistanceOhms != nil {
+	if v := s.SkinResistanceOhms; v != nil {
+		if err := checkFloat("skin_resistance_ohms", *v, minSkinOhms, maxSkinOhms); err != nil {
+			return err
+		}
 		measurements++
 	}
-	if s.SkinPh != nil {
+	if v := s.SkinPh; v != nil {
+		if err := checkFloat("skin_ph", *v, minSkinPH, maxSkinPH); err != nil {
+			return err
+		}
 		measurements++
 	}
 	if s.GetConsciousness() != telemetryv1.Consciousness_CONSCIOUSNESS_UNSPECIFIED {
@@ -111,6 +121,24 @@ func Validate(s *telemetryv1.VitalsSample, now time.Time) error {
 
 	if measurements == 0 {
 		return ErrNoMeasurements
+	}
+
+	return nil
+}
+
+// checkFloat rejects a float measurement that is out of range OR not finite.
+//
+// The finiteness check is not paranoia: every comparison against NaN is false,
+// so a plain `v < lo || v > hi` silently ACCEPTS NaN. A NaN vital would reach
+// the time-series store and then the scoring service, where it propagates
+// through any arithmetic it touches.
+func checkFloat(field string, got, lo, hi float64) error {
+	if math.IsNaN(got) || math.IsInf(got, 0) {
+		return fmt.Errorf("%s: %w (got %v)", field, ErrNotFinite, got)
+	}
+
+	if got < lo || got > hi {
+		return rangeErr(field, got, lo, hi)
 	}
 
 	return nil

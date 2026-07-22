@@ -17,7 +17,7 @@ software in a clinical or care context does so as the responsible manufacturer/o
 under applicable law (including EU MDR 2017/745 and GDPR) and must perform their own
 conformity assessment. See [DISCLAIMER.md](DISCLAIMER.md).
 
-## What it demonstrates
+## What it is
 
 A deliberately small but **complete, deployable platform** — one repository containing the
 application code *and* the infrastructure that runs it:
@@ -50,7 +50,7 @@ the alternatives considered and why they lost.
 | Runtime platform | **Kubernetes everywhere** — minikube (dev), k3s (cloud) | Identical manifests in every environment; only overlay variables differ |
 | API gateway | **Apache APISIX** | The most complete OSS gateway today: OIDC plugin, native gRPC proxy + transcoding, rate limiting, TLS |
 | Identity / authorization | **ZITADEL** (OIDC + PKCE) / **OpenFGA** (relationship-based) | Standards-based login enforced at the gateway; "who may see which care recipient" as data, not code |
-| Web application | **Laravel + Octane on FrankenPHP** | Productive, battle-tested product framework; worker mode + PHP-functions-in-Go showcase |
+| Web application | **Laravel + Octane on FrankenPHP** | Productive, battle-tested product framework; worker mode plus selected PHP functions implemented in Go |
 | Services | **Go** telemetry (gRPC-first) · **Python** assessment · **Python** media | Each language where it's strongest: throughput, scientific scoring, ML/media tooling |
 | API styles | **REST + gRPC + GraphQL (BFF)** | Each where it earns its place — see [Three API styles](#architecture) |
 | Message broker | **NATS JetStream** | Decouples device ingest from processing; tiny footprint; MQTT-capable; claim-check + batching patterns |
@@ -485,10 +485,10 @@ Cost is treated as a first-class operational signal, sized for a demonstration p
 
 ## Status
 
-Early scaffolding — the legal and infrastructure baseline is in place; application
-services land next. This repository is a skills-demonstration platform; it favors clear,
-readable, well-tested code over feature breadth, and it will be optimized further should
-any part of it ever need to grow beyond demonstration scale.
+Active development. The infrastructure baseline, the web application, and the telemetry
+service are in place; the assessment and media services are next. The platform runs on a
+single machine per environment by design (see [Why this architecture](#why-this-architecture));
+larger deployments are a documented configuration change, not a rewrite.
 
 ## Research lineage
 

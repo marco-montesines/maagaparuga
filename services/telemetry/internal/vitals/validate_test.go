@@ -1,6 +1,7 @@
 package vitals_test
 
 import (
+	"math"
 	"testing"
 	"time"
 
@@ -103,6 +104,41 @@ func TestValidate(t *testing.T) {
 				systolic, diastolic := uint32(120), uint32(80)
 				s.BpSystolic, s.BpDiastolic = &systolic, &diastolic
 			},
+		},
+		{
+			// NaN defeats naive range checks: every comparison against NaN is
+			// false, so `v < min || v > max` lets it through. A NaN vital would
+			// reach the store and then the scoring service.
+			name: "NaN heart rate is rejected",
+			mutate: func(s *telemetryv1.VitalsSample) {
+				spo2 := math.NaN()
+				s.Spo2Percent = &spo2
+			},
+			wantErr: true,
+		},
+		{
+			name: "infinite temperature is rejected",
+			mutate: func(s *telemetryv1.VitalsSample) {
+				temp := math.Inf(1)
+				s.BodyTempC = &temp
+			},
+			wantErr: true,
+		},
+		{
+			name: "NaN skin pH is rejected",
+			mutate: func(s *telemetryv1.VitalsSample) {
+				ph := math.NaN()
+				s.SkinPh = &ph
+			},
+			wantErr: true,
+		},
+		{
+			name: "implausible skin resistance is rejected",
+			mutate: func(s *telemetryv1.VitalsSample) {
+				ohms := -1.0
+				s.SkinResistanceOhms = &ohms
+			},
+			wantErr: true,
 		},
 		{
 			name: "consciousness alone counts as a measurement",
