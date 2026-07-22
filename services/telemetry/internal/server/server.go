@@ -13,6 +13,8 @@ import (
 	"google.golang.org/grpc/status"
 
 	telemetryv1 "maagaparuga/services/telemetry/gen/maagaparuga/telemetry/v1"
+	"maagaparuga/services/telemetry/internal/auth"
+	"maagaparuga/services/telemetry/internal/authz"
 	"maagaparuga/services/telemetry/internal/vitals"
 )
 
@@ -38,16 +40,50 @@ type Server struct {
 
 	publisher Publisher
 	reader    Reader
+	authz     authz.Checker // nil = authorization not enforced (dev only)
 	log       *slog.Logger
 	now       func() time.Time
 }
 
-func New(publisher Publisher, reader Reader, log *slog.Logger) *Server {
+// New builds a server. A nil authz.Checker disables per-object authorization
+// — acceptable ONLY when authentication is also disabled for local
+// development; in that mode there is no caller identity to authorize against.
+func New(publisher Publisher, reader Reader, checker authz.Checker, log *slog.Logger) *Server {
 	return &Server{
 		publisher: publisher,
 		reader:    reader,
+		authz:     checker,
 		log:       log,
 		now:       time.Now,
+	}
+}
+
+// authorize checks that the authenticated caller holds `relation` on the care
+// recipient. When no checker is configured (dev, auth disabled) it allows —
+// but that path is unreachable in any mode that has a caller identity, because
+// the checker is wired whenever authentication is.
+func (s *Server) authorize(ctx context.Context, relation, careRecipientID string) error {
+	if s.authz == nil {
+		return nil
+	}
+
+	claims, ok := auth.ClaimsFrom(ctx)
+	if !ok {
+		// Authorization is enforced but there is no verified identity — deny.
+		return status.Error(codes.Unauthenticated, "no verified identity")
+	}
+
+	switch err := s.authz.Check(ctx, claims.Subject, relation, careRecipientID); {
+	case err == nil:
+		return nil
+	case errors.Is(err, authz.ErrDenied):
+		return status.Error(codes.PermissionDenied, "not permitted for this care recipient")
+	default:
+		// A transport/config failure must NOT fail open: deny, and log the
+		// real cause for operators.
+		s.log.ErrorContext(ctx, "authorization check failed", "error", err)
+
+		return status.Error(codes.PermissionDenied, "authorization unavailable")
 	}
 }
 
@@ -58,6 +94,12 @@ func (s *Server) StreamVitals(stream telemetryv1.VitalsService_StreamVitalsServe
 	ctx := stream.Context()
 
 	var accepted, rejected uint64
+
+	// A stream typically carries one device bound to one recipient; cache the
+	// allow decision per recipient so a long stream makes one authz call, not
+	// one per sample — while still checking every distinct recipient a caller
+	// tries to write, so it cannot slip in a sample for someone else.
+	allowed := make(map[string]bool)
 
 	for {
 		req, err := stream.Recv()
@@ -79,6 +121,18 @@ func (s *Server) StreamVitals(stream telemetryv1.VitalsService_StreamVitalsServe
 			rejected++
 
 			continue
+		}
+
+		recipient := sample.GetCareRecipientId()
+		if !allowed[recipient] {
+			if err := s.authorize(ctx, authz.RelationEditor, recipient); err != nil {
+				// Authorization failures are terminal for the stream: a caller
+				// writing for a recipient it may not touch is not a flaky
+				// sensor, it is a rejected identity.
+				return err
+			}
+
+			allowed[recipient] = true
 		}
 
 		if err := s.publisher.Publish(ctx, sample); err != nil {
@@ -105,6 +159,10 @@ func (s *Server) PublishVitals(
 		return nil, status.Error(codes.InvalidArgument, err.Error())
 	}
 
+	if err := s.authorize(ctx, authz.RelationEditor, sample.GetCareRecipientId()); err != nil {
+		return nil, err
+	}
+
 	if err := s.publisher.Publish(ctx, sample); err != nil {
 		s.log.ErrorContext(ctx, "publish failed", "error", err)
 
@@ -120,6 +178,10 @@ func (s *Server) GetWindow(
 ) (*telemetryv1.GetWindowResponse, error) {
 	if req.GetCareRecipientId() == "" {
 		return nil, status.Error(codes.InvalidArgument, "care_recipient_id is required")
+	}
+
+	if err := s.authorize(ctx, authz.RelationViewer, req.GetCareRecipientId()); err != nil {
+		return nil, err
 	}
 
 	to := s.now()

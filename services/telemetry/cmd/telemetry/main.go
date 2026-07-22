@@ -29,6 +29,7 @@ import (
 
 	telemetryv1 "maagaparuga/services/telemetry/gen/maagaparuga/telemetry/v1"
 	"maagaparuga/services/telemetry/internal/auth"
+	"maagaparuga/services/telemetry/internal/authz"
 	"maagaparuga/services/telemetry/internal/broker"
 	"maagaparuga/services/telemetry/internal/server"
 	"maagaparuga/services/telemetry/internal/simulator"
@@ -82,6 +83,9 @@ func runServe(ctx context.Context, log *slog.Logger, args []string) error {
 	issuer := fs.String("oidc-issuer", env("OIDC_ISSUER", ""), "ZITADEL issuer URL; device tokens are verified against its JWKS")
 	audience := fs.String("oidc-audience", env("OIDC_AUDIENCE", "telemetry"), "expected token audience")
 	authMode := fs.String("auth", env("AUTH_MODE", "jwt"), "jwt (verify device tokens) or disabled")
+	fgaURL := fs.String("openfga-url", env("OPENFGA_URL", "http://openfga:8080"), "OpenFGA base URL")
+	fgaStore := fs.String("openfga-store", env("OPENFGA_STORE_ID", ""), "OpenFGA store id")
+	fgaModel := fs.String("openfga-model", env("OPENFGA_MODEL_ID", ""), "OpenFGA authorization model id")
 	_ = fs.Parse(args)
 
 	bkr, err := broker.Connect(ctx, *natsURL)
@@ -103,13 +107,18 @@ func runServe(ctx context.Context, log *slog.Logger, args []string) error {
 		return err
 	}
 
+	checker, err := authzChecker(log, *authMode, *fgaURL, *fgaStore, *fgaModel)
+	if err != nil {
+		return err
+	}
+
 	listener, err := net.Listen("tcp", *addr)
 	if err != nil {
 		return fmt.Errorf("listen: %w", err)
 	}
 
 	grpcServer := grpc.NewServer(serverOpts...)
-	telemetryv1.RegisterVitalsServiceServer(grpcServer, server.New(bkr, st, log))
+	telemetryv1.RegisterVitalsServiceServer(grpcServer, server.New(bkr, st, checker, log))
 
 	healthServer := health.NewServer()
 	healthv1.RegisterHealthServer(grpcServer, healthServer)
@@ -171,6 +180,30 @@ func authOptions(
 	default:
 		return nil, fmt.Errorf("unknown auth mode %q (want jwt or disabled)", mode)
 	}
+}
+
+// authzChecker builds the per-object authorization checker. It is bound to the
+// auth mode: with authentication on there is a caller identity to authorize,
+// so an OpenFGA store MUST be configured; with authentication disabled there
+// is no identity, so authorization is disabled too (nil) — the same loud
+// local-only posture as auth.
+func authzChecker(
+	log *slog.Logger,
+	authMode, url, storeID, modelID string,
+) (authz.Checker, error) {
+	if authMode == "disabled" {
+		log.Warn("OBJECT AUTHORIZATION DISABLED — callers are not checked against " +
+			"care-recipient relationships (follows AUTH_MODE=disabled; local only)")
+
+		return nil, nil
+	}
+
+	if storeID == "" {
+		return nil, errors.New("auth=jwt requires OPENFGA_STORE_ID so callers can be " +
+			"authorized per care recipient (or -auth=disabled for local work)")
+	}
+
+	return authz.New(authz.Config{URL: url, StoreID: storeID, ModelID: modelID})
 }
 
 func runWrite(ctx context.Context, log *slog.Logger, args []string) error {

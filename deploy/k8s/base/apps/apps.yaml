@@ -156,6 +156,11 @@ data:
   OIDC_ISSUER: http://zitadel:8080
   OIDC_AUDIENCE: telemetry
   AUTH_MODE: jwt
+  # Per-object authorization (OpenFGA) is enforced whenever AUTH_MODE=jwt.
+  # STORE/MODEL ids are set once the FGA store is bootstrapped (fga:bootstrap).
+  OPENFGA_URL: http://openfga:8080
+  OPENFGA_STORE_ID: ""
+  OPENFGA_MODEL_ID: ""
 ---
 apiVersion: apps/v1
 kind: Deployment

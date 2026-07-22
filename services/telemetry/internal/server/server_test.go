@@ -51,12 +51,19 @@ func (f *fakeReader) Window(
 type fakeStream struct {
 	grpc.ServerStream
 
+	ctx      context.Context
 	incoming []*telemetryv1.StreamVitalsRequest
 	position int
 	reply    *telemetryv1.StreamVitalsResponse
 }
 
-func (f *fakeStream) Context() context.Context     { return context.Background() }
+func (f *fakeStream) Context() context.Context {
+	if f.ctx != nil {
+		return f.ctx
+	}
+
+	return context.Background()
+}
 func (f *fakeStream) SetHeader(metadata.MD) error  { return nil }
 func (f *fakeStream) SendHeader(metadata.MD) error { return nil }
 func (f *fakeStream) SetTrailer(metadata.MD)       {}
@@ -90,7 +97,9 @@ func sample(deviceID string, hr uint32) *telemetryv1.StreamVitalsRequest {
 }
 
 func newServer(pub server.Publisher, reader server.Reader) *server.Server {
-	return server.New(pub, reader, slog.New(slog.DiscardHandler))
+	// nil checker = authorization not enforced (the auth-disabled dev mode);
+	// the authorization tests below supply a checker explicitly.
+	return server.New(pub, reader, nil, slog.New(slog.DiscardHandler))
 }
 
 // A flaky sensor must not disconnect a device: invalid samples are counted and

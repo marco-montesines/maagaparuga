@@ -24,6 +24,13 @@ func ClaimsFrom(ctx context.Context) (*Claims, bool) {
 	return claims, ok
 }
 
+// ContextWithClaims attaches verified claims to a context. The interceptor
+// uses it after a successful verification; downstream packages and tests use
+// it to construct an authenticated context.
+func ContextWithClaims(ctx context.Context, claims *Claims) context.Context {
+	return context.WithValue(ctx, claimsKey{}, claims)
+}
+
 // Interceptors enforces authentication on every RPC except the ones named in
 // Public (the gRPC health service, so Kubernetes probes need no credentials).
 //
@@ -99,7 +106,7 @@ func (i *Interceptors) authenticate(ctx context.Context, method string) (context
 		return nil, status.Error(codes.Unauthenticated, "invalid credentials")
 	}
 
-	return context.WithValue(ctx, claimsKey{}, claims), nil
+	return ContextWithClaims(ctx, claims), nil
 }
 
 // wrappedStream carries the authenticated context to the handler, since
