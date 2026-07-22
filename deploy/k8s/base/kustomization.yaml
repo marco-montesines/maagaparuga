@@ -12,6 +12,7 @@ resources:
   - seaweedfs/seaweedfs.yaml
   - nats/nats.yaml
   - zitadel/zitadel.yaml
+  - zitadel/bootstrap-job.yaml
   - openfga/openfga.yaml
   - apisix/apisix.yaml
   - apps/apps.yaml
@@ -32,6 +33,8 @@ images:
     newTag: 2.14.3-alpine
   - name: ghcr.io/zitadel/zitadel
     newTag: v4.16.1
+  - name: maagaparuga-zitadel-bootstrap
+    newTag: dev
   - name: openfga/openfga
     newTag: v1.18.1
   - name: apache/apisix

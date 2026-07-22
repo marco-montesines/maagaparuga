@@ -1,0 +1,53 @@
+# One-time ZITADEL install configuration (project, roles, web OIDC app,
+# telemetry service account). Runs after ZITADEL's first-instance init has
+# written the admin machine key to the shared PVC. Idle after it succeeds.
+#
+# It does NOT create human admins in production — the admin comes from
+# ZITADEL's first-instance human admin (operator-supplied). The dev overlay
+# adds -seed-mock-users to also create the fictitious demonstration logins.
+#
+# The result (web client id/secret, ids) is printed to the Job log and written
+# to /out/zitadel.json for the operator to consume.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: zitadel-bootstrap
+spec:
+  backoffLimit: 10
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: zitadel-bootstrap
+        app.kubernetes.io/part-of: maagaparuga
+    spec:
+      restartPolicy: OnFailure
+      enableServiceLinks: false
+      containers:
+        - name: bootstrap
+          image: maagaparuga-zitadel-bootstrap:pinned
+          args:
+            - -issuer=$(ZITADEL_ISSUER)
+            - -key=/machinekey/admin-sa.json
+            - -redirect=$(WEB_REDIRECT_URI)
+            - -post-logout=$(WEB_POST_LOGOUT_URI)
+          env:
+            - name: ZITADEL_ISSUER
+              value: http://zitadel:8080
+            - name: WEB_REDIRECT_URI
+              value: http://localhost:9080/auth/callback
+            - name: WEB_POST_LOGOUT_URI
+              value: http://localhost:9080/
+          volumeMounts:
+            - name: machinekey
+              mountPath: /machinekey
+              readOnly: true
+          resources:
+            requests:
+              cpu: 50m
+              memory: 32Mi
+            limits:
+              memory: 64Mi
+      volumes:
+        - name: machinekey
+          persistentVolumeClaim:
+            claimName: zitadel-machinekey

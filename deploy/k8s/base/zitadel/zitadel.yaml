@@ -1,14 +1,33 @@
 # ZITADEL — OIDC identity provider (ADR 0009). State lives in PostgreSQL
 # (role/database managed by the CNPG cluster manifest).
 # Dev runs without TLS behind APISIX; cloud overlays set the external domain
-# and secure mode (P6). Deeper configuration (clients, roles, seeding) lands
-# with the web app in P2.
+# and secure mode (P6).
+#
+# On first-instance init ZITADEL creates an admin **machine (service) user**
+# and writes its JSON key to /machinekey (a shared PVC). The bootstrap Job
+# reads that key to configure the project, OIDC app, roles, and mock users
+# through the Management API — the documented, reproducible ZITADEL pattern
+# (the image is distroless, so there is no interactive/console step).
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: zitadel-machinekey
+spec:
+  accessModes: ["ReadWriteOnce"]
+  resources:
+    requests:
+      storage: 64Mi
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: zitadel
 spec:
   replicas: 1
+  strategy:
+    # The machine-key PVC is RWO; a rolling update would try to mount it into
+    # two pods at once. Recreate avoids that (single-replica identity service).
+    type: Recreate
   selector:
     matchLabels:
       app.kubernetes.io/name: zitadel
@@ -31,8 +50,11 @@ spec:
           args:
             - start-from-init
             - --masterkeyFromEnv
+            # dev: plain HTTP, no external TLS terminator assumed, so the
+            # issuer is http://<externalDomain>:<externalPort>. Cloud overlays
+            # set --tlsMode external behind the gateway's TLS (P6).
             - --tlsMode
-            - external
+            - disabled
           env:
             - name: ZITADEL_MASTERKEY
               valueFrom:
@@ -70,11 +92,23 @@ spec:
             - name: ZITADEL_DATABASE_POSTGRES_ADMIN_SSL_MODE
               value: disable
             - name: ZITADEL_EXTERNALDOMAIN
-              value: localhost
+              value: zitadel
             - name: ZITADEL_EXTERNALPORT
               value: "8080"
             - name: ZITADEL_EXTERNALSECURE
               value: "false"
+            # First-instance org + an admin machine user whose JSON key is
+            # written to the shared PVC for the bootstrap Job to consume.
+            - name: ZITADEL_FIRSTINSTANCE_ORG_NAME
+              value: MaagapAruga
+            - name: ZITADEL_FIRSTINSTANCE_ORG_MACHINE_MACHINE_USERNAME
+              value: bootstrap
+            - name: ZITADEL_FIRSTINSTANCE_ORG_MACHINE_MACHINE_NAME
+              value: bootstrap
+            - name: ZITADEL_FIRSTINSTANCE_ORG_MACHINE_MACHINEKEY_TYPE
+              value: "1" # JSON key
+            - name: ZITADEL_FIRSTINSTANCE_MACHINEKEYPATH
+              value: /machinekey/admin-sa.json
           ports:
             - name: http
               containerPort: 8080
@@ -90,6 +124,13 @@ spec:
               port: http
             initialDelaySeconds: 20
             periodSeconds: 10
+          volumeMounts:
+            - name: machinekey
+              mountPath: /machinekey
+      volumes:
+        - name: machinekey
+          persistentVolumeClaim:
+            claimName: zitadel-machinekey
 ---
 apiVersion: v1
 kind: Service

@@ -102,6 +102,27 @@ dev-smoke: ## Post-deploy smoke test: every service answered through its own ent
 		| sed 's/^/   vitals rows: /' || echo "   vitals table not created yet"
 	@echo "(assessment + media join this suite in P4/P4b)"
 
+.PHONY: dev-bootstrap
+dev-bootstrap: ## Configure ZITADEL + OpenFGA and inject client id/secret + store ids into the running cluster
+	@echo "Running ZITADEL bootstrap Job (project, roles, web client, telemetry SA, mock users)..."
+	kubectl -n $(NAMESPACE) delete job zitadel-bootstrap --ignore-not-found >/dev/null 2>&1 || true
+	kubectl apply -k $(DEV_OVERLAY) >/dev/null
+	kubectl -n $(NAMESPACE) wait --for=condition=complete job/zitadel-bootstrap --timeout=120s
+	@echo "Bootstrapping OpenFGA store + model (web app tool)..."
+	@kubectl -n $(NAMESPACE) exec deploy/web -- php artisan fga:bootstrap 2>/dev/null | grep OPENFGA_ || true
+	@echo "---"
+	@echo "Read the web client id/secret and store ids from:"
+	@echo "  kubectl -n $(NAMESPACE) logs job/zitadel-bootstrap"
+	@echo "Then patch web-secrets + telemetry-config with them (these are runtime"
+	@echo "values, never committed), and 'make dev-seed' to load mock data."
+
+.PHONY: dev-seed
+dev-seed: ## Load mock data (users already seeded by bootstrap; this adds records + vitals + FGA tuples) — usable in ANY env to validate a deployment
+	kubectl -n $(NAMESPACE) exec deploy/web -- php artisan migrate --force
+	kubectl -n $(NAMESPACE) exec deploy/web -- php artisan db:seed --force
+	kubectl -n $(NAMESPACE) exec deploy/web -- php artisan fga:sync
+	$(MAKE) dev-simulate SAMPLES=48
+
 .PHONY: dev-status
 dev-status: ## Show pods, services, and PVCs in the dev cluster
 	kubectl -n $(NAMESPACE) get pods,svc,pvc
