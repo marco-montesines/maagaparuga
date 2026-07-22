@@ -42,7 +42,7 @@ func loadKey(path string) (*serviceAccountKey, error) {
 // accessToken performs the JWT-profile grant: sign a short-lived assertion
 // with the service account's private key, exchange it for an access token
 // scoped to manage the ZITADEL instance.
-func accessToken(ctx context.Context, issuer string, key *serviceAccountKey) (string, error) {
+func accessToken(ctx context.Context, endpoint, issuer string, key *serviceAccountKey) (string, error) {
 	signKey, err := jwt.ParseRSAPrivateKeyFromPEM([]byte(key.Key))
 	if err != nil {
 		return "", fmt.Errorf("parse private key: %w", err)
@@ -73,11 +73,16 @@ func accessToken(ctx context.Context, issuer string, key *serviceAccountKey) (st
 	}
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost,
-		issuer+"/oauth/v2/token", strings.NewReader(form.Encode()))
+		endpoint+"/oauth/v2/token", strings.NewReader(form.Encode()))
 	if err != nil {
 		return "", err
 	}
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	// ZITADEL routes by Host; present the issuer host even when dialing the
+	// in-cluster endpoint.
+	if h := hostOf(issuer); h != "" {
+		req.Host = h
+	}
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
@@ -100,4 +105,14 @@ func accessToken(ctx context.Context, issuer string, key *serviceAccountKey) (st
 	}
 
 	return body.AccessToken, nil
+}
+
+// hostOf extracts host[:port] from a URL for use as an HTTP Host header.
+func hostOf(raw string) string {
+	u, err := url.Parse(raw)
+	if err != nil {
+		return ""
+	}
+
+	return u.Host
 }

@@ -47,3 +47,6 @@ __pycache__/
 .idea/
 .vscode/
 .DS_Store
+
+# compiled bootstrap binary (build artifact)
+tools/zitadel-bootstrap/zitadel-bootstrap

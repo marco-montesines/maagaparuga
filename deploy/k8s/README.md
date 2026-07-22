@@ -52,3 +52,18 @@ services address each other by DNS name (`opensearch:9200`, `nats:4222`, …).
   OpenSearch x3, ClickHouse x3 + Keeper, PostgreSQL primary + replica (ADR 0014).
 - Every workload declares resource requests and limits (FinOps: right-sizing on small
   VMs).
+
+
+## Browser login (dev)
+
+The OIDC issuer is a single host shared by ZITADEL and the web app, so it must
+resolve the same for your browser and inside the cluster:
+
+1. `make dev-dns` — adds a CoreDNS rewrite so the cluster resolves
+   `maagaparuga.test` to the gateway.
+2. Add to your `/etc/hosts` once:  `127.0.0.1 maagaparuga.test`
+3. `make dev-bootstrap` — configures ZITADEL (project, roles, web OIDC client,
+   telemetry service account) and OpenFGA; injects the client id/secret at
+   runtime (never committed).
+4. `make dev-gateway`, then open `http://maagaparuga.test:9080` and sign in
+   (dev personas: `admin@example.com` / `Password1!`).

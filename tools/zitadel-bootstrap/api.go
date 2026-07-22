@@ -11,19 +11,24 @@ import (
 
 // client wraps the ZITADEL Management/Admin REST API with a bearer token.
 type client struct {
-	base  string
+	base  string // where to dial (e.g. http://zitadel:8080)
+	host  string // Host header to present (the issuer host)
 	token string
 	http  *http.Client
 }
 
-func newClient(base, token string) *client {
-	return &client{base: base, token: token, http: http.DefaultClient}
+func newClient(base, issuer, token string) *client {
+	return &client{base: base, host: hostOf(issuer), token: token, http: http.DefaultClient}
 }
 
 // call POSTs a JSON body and decodes the JSON response. ZITADEL's create
 // endpoints are idempotent-unfriendly (they error on duplicates), so callers
 // tolerate AlreadyExists via the returned status.
 func (c *client) call(ctx context.Context, path string, in, out any) (int, error) {
+	return c.callMethod(ctx, http.MethodPost, path, in, out)
+}
+
+func (c *client) callMethod(ctx context.Context, method, path string, in, out any) (int, error) {
 	var payload []byte
 	if in != nil {
 		var err error
@@ -32,13 +37,16 @@ func (c *client) call(ctx context.Context, path string, in, out any) (int, error
 		}
 	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost,
+	req, err := http.NewRequestWithContext(ctx, method,
 		c.base+path, bytes.NewReader(payload))
 	if err != nil {
 		return 0, err
 	}
 	req.Header.Set("Authorization", "Bearer "+c.token)
 	req.Header.Set("Content-Type", "application/json")
+	if c.host != "" {
+		req.Host = c.host
+	}
 
 	resp, err := c.http.Do(req)
 	if err != nil {

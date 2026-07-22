@@ -27,12 +27,13 @@ spec:
           image: maagaparuga-zitadel-bootstrap:pinned
           args:
             - -issuer=$(ZITADEL_ISSUER)
+            - -endpoint=http://zitadel:8080
             - -key=/machinekey/admin-sa.json
             - -redirect=$(WEB_REDIRECT_URI)
             - -post-logout=$(WEB_POST_LOGOUT_URI)
           env:
             - name: ZITADEL_ISSUER
-              value: http://zitadel:8080
+              value: http://maagaparuga.test:9080
             - name: WEB_REDIRECT_URI
               value: http://localhost:9080/auth/callback
             - name: WEB_POST_LOGOUT_URI

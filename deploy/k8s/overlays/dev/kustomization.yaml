@@ -55,7 +55,7 @@ secretGenerator:
       # Set after the ZITADEL client is registered (P2 follow-up).
       - ZITADEL_CLIENT_ID=
       - ZITADEL_CLIENT_SECRET=
-      - ZITADEL_REDIRECT_URI=http://localhost:9080/auth/callback
+      - ZITADEL_REDIRECT_URI=http://maagaparuga.test:9080/auth/callback
 
 generatorOptions:
   disableNameSuffixHash: true   # stable names so base manifests can reference them
@@ -64,14 +64,58 @@ generatorOptions:
 # account are bootstrapped (P2/P3 follow-up). The telemetry service prints a
 # warning on every start while this is set, so it cannot pass unnoticed.
 configMapGenerator:
+  - name: web-config
+    behavior: merge
+    literals:
+      # Single-host OIDC issuer: the browser reaches it via /etc/hosts +
+      # the gateway port-forward, in-cluster services reach it via CoreDNS
+      # (both resolve maagaparuga.test -> the APISIX gateway). See `make
+      # dev-dns` and the /etc/hosts note in deploy/k8s/README.md.
+      - ZITADEL_BASE_URL=http://maagaparuga.test:9080
   - name: telemetry-config
     behavior: merge
     literals:
       - AUTH_MODE=disabled
       - OPENFGA_STORE_ID=
       - OPENFGA_MODEL_ID=
+      # Token issuer once auth is live (matches the single-host issuer).
+      - OIDC_ISSUER=http://maagaparuga.test:9080
 
 patches:
+  # Single-host issuer for dev browser login: ZITADEL's external domain is the
+  # shared host, its external port is the gateway's. Requires a fresh ZITADEL
+  # instance (external domain is fixed at init) — `make dev-reinit-zitadel`.
+  - patch: |-
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: zitadel
+      spec:
+        template:
+          spec:
+            containers:
+              - name: zitadel
+                env:
+                  - name: ZITADEL_EXTERNALDOMAIN
+                    value: maagaparuga.test
+                  - name: ZITADEL_EXTERNALPORT
+                    value: "9080"
+  # Bootstrap registers the browser-facing redirect + post-logout URIs.
+  - patch: |-
+      apiVersion: batch/v1
+      kind: Job
+      metadata:
+        name: zitadel-bootstrap
+      spec:
+        template:
+          spec:
+            containers:
+              - name: bootstrap
+                env:
+                  - name: WEB_REDIRECT_URI
+                    value: http://maagaparuga.test:9080/auth/callback
+                  - name: WEB_POST_LOGOUT_URI
+                    value: http://maagaparuga.test:9080/
   # Dev/demo: bootstrap also seeds the fictitious login users (default off).
   - target:
       kind: Job

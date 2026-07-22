@@ -62,7 +62,8 @@ type output struct {
 }
 
 func main() {
-	issuer := flag.String("issuer", env("ZITADEL_ISSUER", "http://localhost:8080"), "ZITADEL issuer URL")
+	issuer := flag.String("issuer", env("ZITADEL_ISSUER", "http://localhost:8080"), "ZITADEL issuer URL (token audience + Host header)")
+	endpoint := flag.String("endpoint", env("ZITADEL_ENDPOINT", ""), "where to reach ZITADEL (default: the issuer). Set to the in-cluster address to bypass the public gateway")
 	keyPath := flag.String("key", env("ZITADEL_KEY_PATH", "/machinekey/admin-sa.json"), "admin service-account key file")
 	redirect := flag.String("redirect", env("WEB_REDIRECT_URI", "http://localhost:9080/auth/callback"), "web app OIDC redirect URI")
 	postLogout := flag.String("post-logout", env("WEB_POST_LOGOUT_URI", "http://localhost:9080/"), "web app post-logout redirect")
@@ -78,24 +79,44 @@ func main() {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
 
-	if err := run(ctx, *issuer, *keyPath, *redirect, *postLogout, *userPassword, *outPath, *seedUsers); err != nil {
+	target := *endpoint
+	if target == "" {
+		target = *issuer
+	}
+
+	if err := run(ctx, *issuer, target, *keyPath, *redirect, *postLogout, *userPassword, *outPath, *seedUsers); err != nil {
 		log.Fatalf("bootstrap failed: %v", err)
 	}
 }
 
-func run(ctx context.Context, issuer, keyPath, redirect, postLogout, userPassword, outPath string, seedUsers bool) error {
+func run(ctx context.Context, issuer, endpoint, keyPath, redirect, postLogout, userPassword, outPath string, seedUsers bool) error {
 	key, err := loadKey(keyPath)
 	if err != nil {
 		return err
 	}
 
-	token, err := accessToken(ctx, issuer, key)
+	// Dial `endpoint`, but present `issuer` as the audience and Host so ZITADEL
+	// routes to the right instance and the token validates — this lets the
+	// bootstrap reach ZITADEL directly in-cluster without the admin API being
+	// exposed through the public gateway.
+	token, err := accessToken(ctx, endpoint, issuer, key)
 	if err != nil {
 		return err
 	}
 
-	api := newClient(issuer, token)
+	api := newClient(endpoint, issuer, token)
 	out := output{}
+
+	// 0. Use the built-in (legacy) login UI. ZITADEL v4 defaults new instances
+	// to "Login V2", which is a SEPARATE deployment we do not run; without it,
+	// the authorize endpoint redirects to /ui/v2/login and 404s. Disabling the
+	// feature makes authorize use the self-contained /ui/login served by the
+	// ZITADEL container. (PUT is idempotent.)
+	if _, err := api.callMethod(ctx, "PUT", "/v2/features/instance",
+		map[string]any{"loginV2": map[string]any{"required": false}}, nil); err != nil {
+		return fmt.Errorf("set instance features (login v2 off): %w", err)
+	}
+	log.Printf("login: using built-in legacy UI (login v2 disabled)")
 
 	// 1. Project, with role assertion so roles ride the token. Idempotent:
 	// on re-run the project already exists, so fall back to looking it up.

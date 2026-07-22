@@ -111,6 +111,32 @@ data:
             "telemetry:9090": 1
           type: roundrobin
 
+      # ZITADEL is served under the SAME host as the app so the OIDC issuer is
+      # one URL that resolves identically for the browser and for in-cluster
+      # services (the standard single-domain IdP pattern; in production this
+      # host is the real domain, in dev it is provided by /etc/hosts + CoreDNS).
+      # These path prefixes belong to ZITADEL; everything else is the web app.
+      # The Host header is preserved so ZITADEL's instance routing matches its
+      # configured external domain.
+      # Only the browser-facing OIDC/login paths are exposed publicly. The
+      # ZITADEL admin/management/system APIs are deliberately NOT routed here —
+      # they stay in-cluster (services reach them directly at zitadel:8080),
+      # so the public edge cannot touch instance administration.
+      - uris:
+          - /.well-known/*
+          - /oauth/*
+          - /oidc/*
+          - /openid/*
+          - /idps/*
+          - /ui/*
+          - /assets/*
+          - /device/*
+          - /saml/*
+        upstream:
+          nodes:
+            "zitadel:8080": 1
+          type: roundrobin
+
       # Everything else -> the web application (Laravel/Octane).
       # P5 adds per-route policies (OIDC enforcement, rate limits) and TLS.
       - uri: /*

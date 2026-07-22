@@ -1,3 +1,4 @@
+
 # MaagapAruga — developer entry points.
 # `make dev` brings up the full platform on minikube (P1 scope: data layer,
 # broker, identity stack, gateway; app services activate as P2-P4 land).
@@ -122,6 +123,24 @@ dev-seed: ## Load mock data (users already seeded by bootstrap; this adds record
 	kubectl -n $(NAMESPACE) exec deploy/web -- php artisan db:seed --force
 	kubectl -n $(NAMESPACE) exec deploy/web -- php artisan fga:sync
 	$(MAKE) dev-simulate SAMPLES=48
+
+.PHONY: dev-dns
+dev-dns: ## Make the cluster resolve maagaparuga.test -> the APISIX gateway (single-host OIDC issuer)
+	@python3 -c "import json,subprocess as sp; \
+	cf=sp.check_output(['kubectl','-n','kube-system','get','cm','coredns','-o','jsonpath={.data.Corefile}']).decode(); \
+	cf=cf if 'maagaparuga.test' in cf else cf.replace('.:53 {\n', '.:53 {\n    rewrite name maagaparuga.test apisix.$(NAMESPACE).svc.cluster.local\n',1); \
+	sp.run(['kubectl','-n','kube-system','patch','cm','coredns','--type','merge','-p',json.dumps({'data':{'Corefile':cf}})],check=True)"
+	kubectl -n kube-system rollout restart deployment/coredns
+	@echo "Add to /etc/hosts once:  127.0.0.1 maagaparuga.test"
+	@echo "Then 'make dev-gateway' and open http://maagaparuga.test:9080"
+
+.PHONY: dev-reinit-zitadel
+dev-reinit-zitadel: ## Re-initialize ZITADEL (needed when the external domain changes; DEV ONLY, wipes its DB)
+	kubectl -n $(NAMESPACE) exec maagaparuga-pg-1 -c postgres -- psql -U postgres -c "DROP DATABASE IF EXISTS zitadel WITH (FORCE);"
+	kubectl -n $(NAMESPACE) exec maagaparuga-pg-1 -c postgres -- psql -U postgres -c "CREATE DATABASE zitadel OWNER zitadel;"
+	-kubectl -n $(NAMESPACE) delete job zitadel-bootstrap --ignore-not-found
+	kubectl apply -k $(DEV_OVERLAY)
+	kubectl -n $(NAMESPACE) delete pod -l app.kubernetes.io/name=zitadel --ignore-not-found
 
 .PHONY: dev-status
 dev-status: ## Show pods, services, and PVCs in the dev cluster
