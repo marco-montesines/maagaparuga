@@ -1,6 +1,6 @@
 # 0004 — Polyglot services: Go, Python, PHP (Laravel + Octane on FrankenPHP)
 
-Date: 2026-07-20 · Status: **Accepted**
+Status: **Accepted**
 
 ## Context
 

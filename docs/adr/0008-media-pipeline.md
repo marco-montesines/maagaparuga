@@ -1,6 +1,6 @@
 # 0008 — Media pipeline: faster-whisper speech-to-text, app-side embeddings
 
-Date: 2026-07-20 · Status: **Accepted**
+Status: **Accepted**
 
 ## Context
 
@@ -16,7 +16,7 @@ VMs with strict memory budgets.
 - **Reference openai/whisper** — rejected: several times slower and heavier than the
   CTranslate2 runtime for the same models.
 - **Cloud STT APIs (Amazon Transcribe, Azure Speech, …)** — rejected: external data
-  flow and per-use cost conflict with a self-contained, no-real-data demonstration.
+  flow and per-use cost conflict with a self-contained, no-real-data design.
 - **faster-whisper** ✅ — CTranslate2 reimplementation of Whisper; int8 quantization on
   CPU, markedly faster at lower memory; tiny/base models on the demo VMs, larger models
   a documented VM-class upgrade.

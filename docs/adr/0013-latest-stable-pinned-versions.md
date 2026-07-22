@@ -1,6 +1,6 @@
 # 0013 — Latest stable releases, pinned exactly
 
-Date: 2026-07-20 · Status: **Accepted**
+Status: **Accepted**
 
 ## Context
 

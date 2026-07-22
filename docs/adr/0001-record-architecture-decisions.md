@@ -1,10 +1,10 @@
 # 0001 — Record architecture decisions as ADRs
 
-Date: 2026-07-20 · Status: **Accepted**
+Status: **Accepted**
 
 ## Context
 
-MaagapAruga is a research/educational demonstration platform whose value lies as much
+MaagapAruga is a production-grade, open-source care platform whose value lies as much
 in *why* it is built this way as in what it does. Several major choices here went
 against the "default famous option" (no Kafka, no Loki, no Keycloak, no dedicated
 vector database, no service mesh) — decisions like that are only defensible if the

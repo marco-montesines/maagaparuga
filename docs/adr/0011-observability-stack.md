@@ -1,6 +1,6 @@
 # 0011 — Observability: OpenTelemetry → Prometheus / Tempo / OpenSearch → Grafana
 
-Date: 2026-07-20 · Status: **Accepted**
+Status: **Accepted**
 
 ## Context
 
@@ -18,7 +18,7 @@ service/endpoint, a dashboard link, and a runbook link.
   logs already have a home in OpenSearch (ADR 0005/0006), and running a second log
   database on one VM duplicates a store for no capability. Grafana queries OpenSearch
   directly through its data source plugin.
-- **Pyroscope (profiling)** — skipped at demonstration scale; documented extension.
+- **Pyroscope (profiling)** — skipped for now; documented as a future extension.
 - **OpenTelemetry → Prometheus (metrics) + Tempo (traces) + OpenSearch (logs) →
   Grafana unified alerting** ✅.
 

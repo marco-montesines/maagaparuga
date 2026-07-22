@@ -1,6 +1,6 @@
 # 0009 — ZITADEL (OIDC) + OpenFGA for identity and authorization
 
-Date: 2026-07-20 · Status: **Accepted**
+Status: **Accepted**
 
 ## Context
 
@@ -17,7 +17,7 @@ problems and deserve different tools.
   fastest; rejected: demonstrates no standards-based OIDC/SSO architecture, and every
   service would need its own session story.
 - **Keycloak** — the enterprise standard with the richest built-in authorization
-  engine; rejected: JVM-heavy (~1.5 GB+), the worst fit for a small single VM.
+  engine; rejected: JVM-heavy (~1.5 GB+), the heaviest fit for a resource-constrained cluster node.
 - **Logto / Ory / Authentik** — credible alternatives; not shortlisted: each trades
   away either enterprise signal or operational simplicity without beating ZITADEL for
   this stack.

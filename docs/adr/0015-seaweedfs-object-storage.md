@@ -1,6 +1,6 @@
 # 0015 — SeaweedFS replaces MinIO (upstream discontinued)
 
-Date: 2026-07-21 · Status: **Accepted** · Supersedes the object-store choice in
+Status: **Accepted** · Supersedes the object-store choice in
 [ADR 0005](0005-right-store-per-workload.md)
 
 ## Context
@@ -9,7 +9,7 @@ One day after ADR 0005 selected MinIO as the S3-compatible object store, a
 maintenance check surfaced that the **MinIO community edition is discontinued**:
 the `minio/minio` GitHub repository is archived and its README states
 "THIS REPOSITORY IS NO LONGER MAINTAINED", with distribution now source-only
-(container images stopped at `RELEASE.2025-09-07`) and users directed to the
+(container images stopped mid-2025) and users directed to the
 commercial AIStor products. Pinning a latest-stable that can never move again
 violates ADR 0013, and an unmaintained storage engine is not a defensible
 foundation.

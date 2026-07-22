@@ -1,12 +1,12 @@
 # 0003 — Apache APISIX as the API gateway
 
-Date: 2026-07-20 · Status: **Accepted**
+Status: **Accepted**
 
 ## Context
 
 One public entry point must terminate TLS, route to four backends, enforce OIDC
-authentication, rate-limit, proxy gRPC, and expose a gRPC service as REST — on a small
-VM, fully open source.
+authentication, rate-limit, proxy gRPC, and expose a gRPC service as REST — fully open source, on
+nodes sized for a 3-node cluster.
 
 ## Options considered
 

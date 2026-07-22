@@ -1,6 +1,6 @@
 # 0007 — NATS JetStream as the message broker
 
-Date: 2026-07-20 · Status: **Accepted**
+Status: **Accepted**
 
 ## Context
 
@@ -44,7 +44,7 @@ bounded swap.
 
 ## Consequences
 
-- Fits the single-VM footprint; MQTT device ingest is available without new
+- Fits the demonstration footprint (a lightweight Go binary per node vs a JVM broker); MQTT device ingest is available without new
   infrastructure.
 - **Revisit when** the platform needs multi-node streaming as a baseline: sustained
   high-throughput partitioned streams, long replayable retention for multiple

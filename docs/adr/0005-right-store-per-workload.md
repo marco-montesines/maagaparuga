@@ -1,6 +1,6 @@
 # 0005 — Right store per workload
 
-Date: 2026-07-20 · Status: **Accepted** — object-store selection superseded by [ADR 0015](0015-seaweedfs-object-storage.md)
+Status: **Accepted** — object-store selection superseded by [ADR 0015](0015-seaweedfs-object-storage.md)
 
 ## Context
 
@@ -17,11 +17,11 @@ one VM.
 - **One store per workload, each with exactly one job** ✅:
   - **PostgreSQL** (via the CloudNativePG operator) — system of record; also hosts
     identity (ZITADEL) and authorization (OpenFGA) state. 1 instance by default,
-    primary + streaming replica demonstrated.
+    primary + streaming replica in production.
   - **ClickHouse** — vitals time-series/analytics; 1 node by default, 3-node cluster
-    (+ 3× Keeper) demonstrated.
+    (+ 3× Keeper) in production.
   - **OpenSearch** — full-text + vector search and centralized logs (see ADR 0006);
-    1 node by default, 3-node cluster demonstrated.
+    3-node cluster in production (single node in local dev).
   - **Redis** — sessions, cache, rate-limit counters. Nothing else (see ADR 0006/0007
     for the two times Redis was considered for more and rejected).
   - ~~MinIO~~ **SeaweedFS** (see ADR 0015) — S3-compatible object storage: media originals, attachments, raw

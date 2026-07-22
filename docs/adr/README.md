@@ -1,5 +1,10 @@
 # Architecture Decision Records
 
+> Pre-release: these are living decisions. **Dates are stamped at the public release**,
+> not while the repository is private — so a superseded ADR shows the evolution without
+> pinning a misleading timeline.
+
+
 Every significant architectural choice in MaagapAruga is recorded here as an ADR:
 the context, the **options considered — including the ones rejected and why**, the
 decision, and its consequences (including the conditions under which the decision

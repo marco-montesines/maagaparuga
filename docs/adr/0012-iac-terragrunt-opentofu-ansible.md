@@ -1,12 +1,12 @@
 # 0012 — IaC: Terragrunt + OpenTofu/Terraform + Ansible on Hetzner Cloud
 
-Date: 2026-07-20 · Status: **Accepted**
+Status: **Accepted**
 
 ## Context
 
-Two cloud environments (ephemeral staging, production) on small Hetzner Cloud VMs must
-be reproducible from code: provision VM/network/firewall, install k3s, deploy the
-stack — with cost as a first-class constraint.
+Two cloud environments (ephemeral staging, always-on production), each a 3-node
+Hetzner Cloud cluster, must be reproducible from code: provision nodes/network/firewall,
+install k3s, deploy the stack — with cost as a first-class constraint.
 
 ## Options considered
 
@@ -27,7 +27,7 @@ regardless of provider; the trade-off is documented, not hidden.
 ## Decision
 
 `infra/modules/` (readable, commented HCL) + `infra/terragrunt/{staging,production}/`
-+ `infra/ansible/`. Staging: small VM class, **created for a rehearsal, destroyed
++ `infra/ansible/`. Staging: same 3-node shape as production, **created for a rehearsal, destroyed
 after**. Production: mid-size class (identity stack + media ML). The public **domain is
 a variable** (`base_domain`): apex = production, `staging.<base_domain>` = staging, one
 Let's Encrypt DNS-01 wildcard certificate. FinOps guardrail: `tools/cost-guard` prices

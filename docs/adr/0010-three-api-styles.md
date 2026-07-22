@@ -1,6 +1,6 @@
 # 0010 — Three API styles: REST, gRPC, GraphQL — each where justified
 
-Date: 2026-07-20 · Status: **Accepted**
+Status: **Accepted**
 
 ## Context
 

@@ -1,6 +1,6 @@
 # 0006 — OpenSearch as the vector database
 
-Date: 2026-07-20 · Status: **Accepted**
+Status: **Accepted**
 
 ## Context
 

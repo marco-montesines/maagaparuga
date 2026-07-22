@@ -1,6 +1,6 @@
 # 0002 — Kubernetes in every environment (minikube / k3s)
 
-Date: 2026-07-20 · Status: **Accepted**
+Status: **Accepted**
 
 ## Context
 
@@ -29,6 +29,7 @@ cloud VMs, installed by Ansible. Node counts and sizes are overlay variables.
 ## Consequences
 
 - Identical manifests everywhere; environment differences are variables, not forks.
-- Single-node k3s means no HA control plane — accepted at demonstration scale.
+- The production 3-node cluster can run an HA control plane (3 servers) or a single
+  server node with 2 agents — a per-environment sizing choice, not a code change.
 - Revisit when: multiple nodes per environment become the norm (k3s scales to
   multi-node; beyond that, a managed Kubernetes service becomes the comparison).
