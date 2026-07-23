@@ -149,6 +149,8 @@ flowchart LR
         lake[("SeaweedFS<br/>S3 data lake — media originals,<br/>attachments, raw telemetry archive")]
     end
 
+    backup[("Immutable off-node backup store<br/>Object-Lock / WORM · write-only creds<br/>ransomware-resistant · IaC-provisioned")]
+
     users -- "login: OIDC + PKCE" --> gw
     sim -- "gRPC streaming<br/>(REST via gateway transcoding)" --> gw
     devices -- "HTTPS multipart" --> gw
@@ -178,6 +180,10 @@ flowchart LR
     mworker -- "fetch original" --> lake
     mworker -- "timestamped transcript segments<br/>→ ingest pipeline (chunk + embed)" --> osearch
     web -- "attachments" --> lake
+    db == "continuous backup: WAL + base → PITR" ==> backup
+    ch -. "snapshots" .-> backup
+    osearch -. "snapshots" .-> backup
+    lake -. "encrypted incremental (restic)" .-> backup
 ```
 
 Everything runs on **Kubernetes**: [minikube](https://minikube.sigs.k8s.io/) on the
@@ -267,6 +273,40 @@ search, so vectors live next to the text they index. (Redis 8's vector search wa
 evaluated as the alternative; keeping Redis focused on sessions/cache preserves the
 one-clear-job-per-store principle.)
 
+## Resilience — backups & disaster recovery
+
+Data that cannot be restored is not protected, and for a care platform the threat model
+includes **ransomware — which targets backups first.** So recoverability is a design
+concern here, not an afterthought. Full strategy:
+**[deploy/k8s/DISASTER-RECOVERY.md](deploy/k8s/DISASTER-RECOVERY.md).**
+
+**Layered by data class** — a live database is not a pile of files, so each class uses
+the right tool:
+
+| Data | How it is protected |
+|---|---|
+| **PostgreSQL** (system of record) | CloudNativePG continuous backup: base backups **+ continuous WAL archiving** to S3 → **point-in-time recovery** to any second (the WAL *is* the incremental). Daily scheduled base backup + retention. **Restore is verified, not assumed** — a drill recovers a throwaway cluster and checks the row counts match. |
+| **Object storage / files** | `restic` → incremental, deduplicated, **client-side encrypted**, append-only repository |
+| **ClickHouse / OpenSearch** | engine-native snapshots to S3 (largely re-derivable from Postgres + objects, so snapshotted mainly to shorten recovery time) |
+
+**Ransomware resistance**, in priority order: **immutable / Object-Lock (WORM)** backup
+storage, so a backup cannot be altered or deleted before its retention expires *even
+with stolen admin credentials* — the single most important control; **separate,
+write-only backup credentials** (the platform can *write* a backup but cannot *delete*
+one, so a compromised cluster cannot wipe its own restore points); client-side
+encryption; **off-node / offsite** copies (the 3-2-1-1-0 rule); MFA-delete or an
+air-gapped pull; and a **backup-failure alert** so a missing backup pages you instead of
+surprising you at restore time. Recovery is always into a *new* cluster — the
+corrupted volume is left intact for forensics.
+
+**This is where Infrastructure as Code earns its place.** These controls are not
+application config — they are *infrastructure*: the immutable, off-cluster object store,
+its Object-Lock / lifecycle policy, and the split write-only backup identity are
+**provisioned and version-controlled by the IaC** per environment, so disaster recovery
+is reproducible and auditable rather than a manual runbook someone hopes was followed.
+Local dev backs up to the in-cluster object store to prove the *mechanism*; the cloud
+overlays repoint it at durable, immutable, off-node storage for real DR.
+
 ## Repository layout
 
 ```
@@ -336,7 +376,7 @@ Configuration management and application deployment use **Ansible**.
 flowchart LR
     subgraph iac["infra/"]
         tg["Terragrunt<br/>per-env config (staging · production)<br/>remote state + locking"]
-        tofu["OpenTofu / Terraform<br/>modules: server · network · firewall"]
+        tofu["OpenTofu / Terraform<br/>modules: server · network · firewall<br/>backup store · write-only backup identity"]
         ansible["Ansible<br/>k3s install · manifest apply"]
     end
 
@@ -349,15 +389,24 @@ flowchart LR
     subgraph hetzner["Hetzner Cloud"]
         stg["staging cluster<br/>3 nodes (ephemeral)"]
         prd["production cluster<br/>3 nodes (HA)"]
+        dr[("immutable off-node backup store<br/>Object-Lock / WORM · ransomware-resistant<br/>Hetzner Object Storage / external S3")]
     end
 
     validate --> guard --> approval
     approval -- "apply" --> tg
     tg --> tofu
     tofu -- "provision" --> stg & prd
+    tofu -- "provision + Object-Lock policy" --> dr
     tofu -- "inventory handoff" --> ansible
     ansible -- "configure + deploy" --> stg & prd
+    prd -- "WAL + base backups<br/>(write-only creds, cannot delete)" --> dr
+    stg -. "backups" .-> dr
 ```
+
+Disaster recovery is part of the provisioned infrastructure, not a bolt-on: the IaC
+stands up the **immutable, off-node backup store** (Object-Lock/WORM) and a **write-only
+backup identity** — so a compromised cluster can *write* a backup but can never *delete*
+one. See [Resilience](#resilience--backups--disaster-recovery) for the recovery model.
 
 IaC conventions in this repository:
 
@@ -381,6 +430,12 @@ IaC conventions in this repository:
   network** (distinct address ranges per environment), Kubernetes binds to the
   private interface, and all system-internal traffic stays on it; the public
   interface exists solely for the gateway and allow-listed SSH.
+- **Disaster recovery is provisioned, not improvised** — the durable, off-node object
+  store that backups land in, its **Object-Lock / immutability + lifecycle** policy, and
+  the **write-only backup identity** (can write a backup, cannot delete one) are all IaC,
+  per environment. That is what makes the ransomware-resistant, restore-tested recovery
+  described under [Resilience](#resilience--backups--disaster-recovery) reproducible and
+  auditable instead of a manual runbook.
 - **Readable on purpose** — generously commented, beginner-followable HCL: the modules
   double as documentation of the platform's shape.
 
@@ -448,7 +503,7 @@ flowchart LR
     prom --> graf
     tempo --> graf
     oslogs --> graf
-    graf -- "actionable alerts:<br/>context · dashboard link · runbook link" --> notify
+    graf -- "actionable alerts — e.g. backup-failure,<br/>ingest-stall, replication-lag<br/>(context · dashboard link · runbook link)" --> notify
 ```
 
 - **Prometheus** is the metrics engine (scraping the services plus native exporters for
@@ -464,6 +519,10 @@ flowchart LR
 - **Actionable means actionable**: every alert carries current vs. normal values, the
   affected service/endpoint, a link to the relevant dashboard, and a runbook link —
   alerts a responder can act on without archaeology. Representative catalog:
+  - **backup failure / stale recovery point** — a base backup failed or the recovery
+    point stopped advancing, i.e. the disaster-recovery safety net itself is degraded
+    (see [Resilience](#resilience--backups--disaster-recovery)); ransomware makes this a
+    top-priority page, not a nice-to-have
   - vitals ingestion stalls (no events consumed for N minutes — the platform's core
     *maagap* promise)
   - NATS JetStream consumer lag / backlog growth beyond threshold

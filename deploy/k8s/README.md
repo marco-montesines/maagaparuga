@@ -16,7 +16,7 @@ base/                  # every component, single-node defaults, exact image pins
   apisix/              #   API gateway (standalone mode; full routes land in P5)
   apps/                #   app-service shells (images built in P2-P4)
 overlays/
-  dev/                 # minikube: dev-only creds, apps scaled to 0, NodePort 30080
+  dev/                 # minikube: dev-only creds; web + telemetry live, assessment/media at 0
   staging/             # k3s on the staging VM (P6)
   production/          # k3s on the production VM (P6)
 ```
@@ -46,8 +46,9 @@ services address each other by DNS name (`opensearch:9200`, `nats:4222`, …).
 - **Secrets**: the dev overlay generates **dev-only, well-known credentials** for a
   throwaway local cluster — they are not secrets. Cloud overlays receive real secret
   provisioning in P6; nothing secret is ever committed (see `.gitignore`).
-- **App services** are scaled to 0 in dev until their images exist — flip each to 1 as
-  its phase lands (web -> P2, telemetry -> P3, assessment -> P4, media -> P4b).
+- **App services** activate as their phase lands: **web (P2)** and **telemetry +
+  telemetry-writer (P3)** run at replicas 1; **assessment (P4)** and **media (P4b)**
+  stay scaled to 0 until their images exist.
 - **Cluster shape**: node counts are variables; a `cluster` overlay (P6) demonstrates
   OpenSearch x3, ClickHouse x3 + Keeper, PostgreSQL primary + replica (ADR 0014).
 - Every workload declares resource requests and limits (FinOps: right-sizing on small
