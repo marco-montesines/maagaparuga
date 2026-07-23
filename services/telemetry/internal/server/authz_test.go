@@ -65,7 +65,7 @@ func TestPublishDeniedForUnrelatedRecipient(t *testing.T) {
 	t.Parallel()
 
 	pub := &fakePublisher{}
-	checker := &fakeChecker{allow: map[string]bool{"editor:1": true}} // related to 1, not 2
+	checker := &fakeChecker{allow: map[string]bool{"vitals_writer:1": true}} // related to 1, not 2
 
 	_, err := serverWithAuthz(pub, &fakeReader{}, checker).
 		PublishVitals(authedCtx(), publishReq("2"))
@@ -82,7 +82,7 @@ func TestPublishAllowedForRelatedRecipient(t *testing.T) {
 	t.Parallel()
 
 	pub := &fakePublisher{}
-	checker := &fakeChecker{allow: map[string]bool{"editor:1": true}}
+	checker := &fakeChecker{allow: map[string]bool{"vitals_writer:1": true}}
 
 	if _, err := serverWithAuthz(pub, &fakeReader{}, checker).
 		PublishVitals(authedCtx(), publishReq("1")); err != nil {
@@ -132,7 +132,7 @@ func TestStreamAuthorizesPerRecipient(t *testing.T) {
 	t.Parallel()
 
 	pub := &fakePublisher{}
-	checker := &fakeChecker{allow: map[string]bool{"editor:1": true}}
+	checker := &fakeChecker{allow: map[string]bool{"vitals_writer:1": true}}
 
 	stream := &fakeStream{ctx: authedCtx(), incoming: []*telemetryv1.StreamVitalsRequest{
 		sample("device-1", 72), // recipient 1 (allowed)
@@ -159,7 +159,7 @@ func TestStreamTerminatesOnUnauthorizedRecipient(t *testing.T) {
 	t.Parallel()
 
 	pub := &fakePublisher{}
-	checker := &fakeChecker{allow: map[string]bool{"editor:1": true}}
+	checker := &fakeChecker{allow: map[string]bool{"vitals_writer:1": true}}
 
 	s1 := sample("device-1", 72)
 	s1.Sample.CareRecipientId = "1"

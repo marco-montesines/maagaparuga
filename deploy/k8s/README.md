@@ -67,3 +67,42 @@ resolve the same for your browser and inside the cluster:
    runtime (never committed).
 4. `make dev-gateway`, then open `http://maagaparuga.test:9080` and sign in
    (dev personas: `admin@example.com` / `Password1!`).
+
+## Device (IoMT) auth (dev)
+
+The telemetry service starts with `AUTH_MODE=disabled` so `make dev` comes up
+without identity wiring (it warns loudly on every start). To turn on device
+authentication + per-recipient authorization:
+
+1. `make dev-bootstrap` — provisions the telemetry device service account and
+   emits its M2M credentials.
+2. `make dev-device-auth` — injects the device credential (runtime-only, never
+   committed), authorizes the device in OpenFGA (the `device` relation on the
+   mock recipients), and flips telemetry to `AUTH_MODE=jwt`.
+3. `make dev-simulate` — streams mock vitals as an **authenticated** device.
+
+How it works: the device obtains a ZITADEL-signed JWT (audience = the project
+id); telemetry verifies it against the JWKS, then OpenFGA checks the token
+subject holds `vitals_writer` (= `assigned_staff or device`) on the care
+recipient. A tokenless stream is rejected `Unauthenticated`; a stream for a
+recipient the device isn't granted is rejected `PermissionDenied`. Onboarding
+method is pluggable (`-auth-method`): `client_credentials` (default),
+`jwt_profile` (machine key), or `static` (a pre-minted token via `-token`).
+
+## Backups & disaster recovery
+
+Postgres has continuous backup (WAL archiving + base backups) to S3 — in dev,
+the in-cluster SeaweedFS `pg-backups` bucket. See **[DISASTER-RECOVERY.md](
+DISASTER-RECOVERY.md)** for the full strategy (per-data-class tooling,
+ransomware controls, RPO/RTO).
+
+- `make dev-backup` — take an on-demand base backup.
+- `make dev-restore-verify` — restore drill: recover a throwaway cluster from
+  the backup, confirm row counts match, tear it down.
+
+A **backup-failure alert** is wired (Grafana unified alerting, provisioned as
+code in `base/observability/`): Prometheus scrapes CNPG's backup metrics and
+Grafana fires `PostgresBackupFailed` when the last backup attempt failed
+(recovery point not advancing), auto-resolving when a good backup lands.
+Reach Grafana with `make dev-forward SVC=grafana PORT=3000` (admin /
+`dev-grafana-admin` in dev).

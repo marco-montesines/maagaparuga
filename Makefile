@@ -14,6 +14,10 @@ TELEMETRY_IMAGE := ghcr.io/marco-montesines/maagaparuga-telemetry:dev
 WEB_IMAGE       := ghcr.io/marco-montesines/maagaparuga-web:dev
 
 # CloudNativePG operator — pinned release manifest (ADR 0005, 0013).
+# HOLD at <=1.30.x: Postgres backups use the in-tree barmanObjectStore, which
+# CNPG removes in 1.31.0. Bumping past 1.30 needs migrating cluster.yaml to the
+# Barman Cloud Plugin first (see the backup note in build-plan). Do not let the
+# auto-version-bump cross 1.31 until that migration lands.
 CNPG_VERSION  ?= 1.30.0
 CNPG_MANIFEST := https://github.com/cloudnative-pg/cloudnative-pg/releases/download/v$(CNPG_VERSION)/cnpg-$(CNPG_VERSION).yaml
 
@@ -77,8 +81,14 @@ dev-expose: ## Port-forward EVERY service to localhost (Ctrl-C stops all)
 
 .PHONY: dev-simulate
 dev-simulate: ## Stream mock IoMT device vitals into the telemetry service (SAMPLES=n, BURST=1)
+	@CID=$$(kubectl -n $(NAMESPACE) get secret telemetry-secrets -o jsonpath='{.data.DEVICE_CLIENT_ID}' 2>/dev/null | base64 -d); \
+	SEC=$$(kubectl -n $(NAMESPACE) get secret telemetry-secrets -o jsonpath='{.data.DEVICE_CLIENT_SECRET}' 2>/dev/null | base64 -d); \
+	ISS=$$(kubectl -n $(NAMESPACE) get cm telemetry-config -o jsonpath='{.data.OIDC_ISSUER}' 2>/dev/null); \
+	AUD=$$(kubectl -n $(NAMESPACE) get cm telemetry-config -o jsonpath='{.data.OIDC_AUDIENCE}' 2>/dev/null); \
 	kubectl -n $(NAMESPACE) run telemetry-sim-$$RANDOM \
 		--rm -i --restart=Never --image=$(TELEMETRY_IMAGE) \
+		--env="OIDC_ISSUER=$$ISS" --env="OIDC_AUDIENCE=$$AUD" \
+		--env="DEVICE_CLIENT_ID=$$CID" --env="DEVICE_CLIENT_SECRET=$$SEC" \
 		-- simulate -target telemetry:9090 -total $(or $(SAMPLES),40) \
 		$(if $(BURST),-burst,-interval 500ms)
 
@@ -124,6 +134,47 @@ dev-seed: ## Load mock data (users already seeded by bootstrap; this adds record
 	kubectl -n $(NAMESPACE) exec deploy/web -- php artisan db:seed --force
 	kubectl -n $(NAMESPACE) exec deploy/web -- php artisan fga:sync
 	$(MAKE) dev-simulate SAMPLES=48
+
+.PHONY: dev-device-auth
+dev-device-auth: ## Turn ON device (IoMT) auth: telemetry verifies device tokens + OpenFGA authorizes the device (needs dev-bootstrap first)
+	@LOG="$$(kubectl -n $(NAMESPACE) logs job/zitadel-bootstrap 2>/dev/null)"; \
+	PROJ=$$(printf '%s' "$$LOG" | sed -n 's/.*"telemetry_project_id": "\([^"]*\)".*/\1/p'); \
+	SUB=$$(printf '%s' "$$LOG"  | sed -n 's/.*"telemetry_user_id": "\([^"]*\)".*/\1/p'); \
+	CID=$$(printf '%s' "$$LOG"  | sed -n 's/.*"telemetry_client_id": "\([^"]*\)".*/\1/p'); \
+	SEC=$$(printf '%s' "$$LOG"  | sed -n 's/.*"telemetry_client_secret": "\([^"]*\)".*/\1/p'); \
+	STORE=$$(kubectl -n $(NAMESPACE) exec deploy/web -- printenv OPENFGA_STORE_ID 2>/dev/null); \
+	MODEL=$$(kubectl -n $(NAMESPACE) exec deploy/web -- printenv OPENFGA_MODEL_ID 2>/dev/null); \
+	if [ -z "$$PROJ" ] || [ -z "$$SEC" ] || [ -z "$$STORE" ]; then \
+		echo "missing bootstrap output (project/secret/store) — run 'make dev-bootstrap' first"; exit 1; fi; \
+	echo "Injecting device credentials (runtime-only, never committed)..."; \
+	kubectl -n $(NAMESPACE) patch secret telemetry-secrets --type merge \
+		-p "{\"stringData\":{\"DEVICE_CLIENT_ID\":\"$$CID\",\"DEVICE_CLIENT_SECRET\":\"$$SEC\"}}" >/dev/null; \
+	echo "Authorizing the device to stream vitals for mock recipients 1-4..."; \
+	kubectl -n $(NAMESPACE) exec deploy/web -- php artisan fga:device $$SUB 1 2 3 4; \
+	echo "Flipping telemetry to AUTH_MODE=jwt (audience=$$PROJ)..."; \
+	kubectl -n $(NAMESPACE) patch configmap telemetry-config --type merge \
+		-p "{\"data\":{\"AUTH_MODE\":\"jwt\",\"OIDC_AUDIENCE\":\"$$PROJ\",\"OPENFGA_STORE_ID\":\"$$STORE\",\"OPENFGA_MODEL_ID\":\"$$MODEL\"}}" >/dev/null; \
+	kubectl -n $(NAMESPACE) rollout restart deployment/telemetry >/dev/null; \
+	kubectl -n $(NAMESPACE) rollout status deployment/telemetry --timeout=120s
+	@echo "Device auth ON. 'make dev-simulate' now streams as an authenticated device."
+
+.PHONY: dev-backup
+dev-backup: ## Take an on-demand Postgres base backup now (WAL archives continuously between backups)
+	@NAME=ondemand-$$(kubectl -n $(NAMESPACE) get backup -o name 2>/dev/null | wc -l | tr -d ' '); \
+	printf 'apiVersion: postgresql.cnpg.io/v1\nkind: Backup\nmetadata:\n  name: %s\n  namespace: $(NAMESPACE)\nspec:\n  method: barmanObjectStore\n  cluster:\n    name: maagaparuga-pg\n' "$$NAME" | kubectl apply -f -; \
+	echo "Watching backup $$NAME ..."; \
+	for i in $$(seq 1 24); do PH=$$(kubectl -n $(NAMESPACE) get backup $$NAME -o jsonpath='{.status.phase}' 2>/dev/null); \
+	  echo "  phase=$$PH"; case "$$PH" in completed) break;; failed) exit 1;; esac; sleep 5; done
+
+.PHONY: dev-restore-verify
+dev-restore-verify: ## Restore DRILL: recover a throwaway cluster from the S3 backup, check row counts match, tear it down
+	@echo "Source app.users: $$(kubectl -n $(NAMESPACE) exec maagaparuga-pg-1 -c postgres -- psql -U postgres -d app -tAc 'select count(*) from users;' 2>/dev/null | tr -d ' ')"
+	@printf 'apiVersion: postgresql.cnpg.io/v1\nkind: Cluster\nmetadata:\n  name: maagaparuga-pg-restore\n  namespace: $(NAMESPACE)\nspec:\n  instances: 1\n  imageName: ghcr.io/cloudnative-pg/postgresql:18.4\n  storage: {size: 2Gi}\n  resources: {requests: {cpu: 100m, memory: 256Mi}, limits: {memory: 512Mi}}\n  bootstrap: {recovery: {source: pg-origin}}\n  externalClusters:\n    - name: pg-origin\n      barmanObjectStore:\n        serverName: maagaparuga-pg\n        destinationPath: s3://pg-backups/\n        endpointURL: http://seaweedfs:8333\n        s3Credentials: {accessKeyId: {name: pg-backup-s3, key: ACCESS_KEY_ID}, secretAccessKey: {name: pg-backup-s3, key: ACCESS_SECRET_KEY}}\n        wal: {compression: gzip}\n' | kubectl apply -f - >/dev/null
+	@echo "Restoring..."; \
+	for i in $$(seq 1 36); do R=$$(kubectl -n $(NAMESPACE) get cluster maagaparuga-pg-restore -o jsonpath='{.status.readyInstances}' 2>/dev/null); \
+	  [ "$$R" = "1" ] && break; sleep 5; done; \
+	echo "Restored app.users: $$(kubectl -n $(NAMESPACE) exec maagaparuga-pg-restore-1 -c postgres -- psql -U postgres -d app -tAc 'select count(*) from users;' 2>/dev/null | tr -d ' ')"; \
+	kubectl -n $(NAMESPACE) delete cluster maagaparuga-pg-restore >/dev/null 2>&1; echo "drill cluster torn down (S3 backups retained)"
 
 .PHONY: web-rebuild
 web-rebuild: ## Rebuild the web app image from apps/web and roll the deployment (dev has no live code mount)

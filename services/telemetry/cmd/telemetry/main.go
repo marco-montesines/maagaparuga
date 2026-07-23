@@ -14,6 +14,7 @@ import (
 	"io"
 	"log/slog"
 	"net"
+	"net/http"
 	"os"
 	"os/signal"
 	"strings"
@@ -31,6 +32,7 @@ import (
 	"maagaparuga/services/telemetry/internal/auth"
 	"maagaparuga/services/telemetry/internal/authz"
 	"maagaparuga/services/telemetry/internal/broker"
+	"maagaparuga/services/telemetry/internal/devauth"
 	"maagaparuga/services/telemetry/internal/server"
 	"maagaparuga/services/telemetry/internal/simulator"
 	"maagaparuga/services/telemetry/internal/store"
@@ -215,7 +217,13 @@ func runWrite(ctx context.Context, log *slog.Logger, args []string) error {
 	chPass := fs.String("clickhouse-password", env("CLICKHOUSE_PASSWORD", ""), "ClickHouse password")
 	batchSize := fs.Int("batch", 500, "max samples per ClickHouse insert")
 	maxWait := fs.Duration("max-wait", 2*time.Second, "idle wait between empty fetches")
+	healthAddr := fs.String("health-addr", env("HEALTH_ADDR", ":9091"), "health endpoint (liveness) address")
 	_ = fs.Parse(args)
+
+	// The writer has no service port, so give Kubernetes a health signal:
+	// a wedged consumer that stops draining the queue but keeps running is a
+	// real failure the liveness probe must catch.
+	serveHealth(ctx, log, *healthAddr)
 
 	bkr, err := broker.Connect(ctx, *natsURL)
 	if err != nil {
@@ -280,11 +288,28 @@ func runSimulate(ctx context.Context, log *slog.Logger, args []string) error {
 	total := fs.Int("total", 0, "stop after N samples (0 = run until interrupted)")
 	burst := fs.Bool("burst", false, "burst mode: sample as fast as possible to demonstrate broker buffering")
 	seed := fs.Uint64("seed", 42, "deterministic seed")
-	token := fs.String("token", env("DEVICE_TOKEN", ""), "bearer token presented as device credentials")
+	// Device onboarding: how the mock device obtains its bearer token. The
+	// telemetry service verifies the resulting JWT identically whichever path
+	// produced it (see internal/devauth).
+	authMethod := fs.String("auth-method", env("DEVICE_AUTH_METHOD", "client_credentials"),
+		"client_credentials (M2M, default), jwt_profile (machine key), or static (use -token)")
+	issuer := fs.String("oidc-issuer", env("OIDC_ISSUER", ""), "ZITADEL issuer for minting a device token")
+	clientID := fs.String("client-id", env("DEVICE_CLIENT_ID", ""), "device client id (client_credentials)")
+	clientSecret := fs.String("client-secret", env("DEVICE_CLIENT_SECRET", ""), "device client secret (client_credentials)")
+	projectID := fs.String("audience", env("OIDC_AUDIENCE", ""), "project id used as the token audience")
+	keyPath := fs.String("key", env("DEVICE_KEY_PATH", ""), "device machine-key file (jwt_profile)")
+	token := fs.String("token", env("DEVICE_TOKEN", ""), "pre-minted bearer token (PAT or any token); overrides -auth-method")
 	_ = fs.Parse(args)
 
 	if *burst {
 		*interval = time.Millisecond
+	}
+
+	// Obtain the device credential BEFORE dialing, so an auth misconfiguration
+	// fails fast with a clear message instead of a stream error.
+	bearer, err := deviceToken(ctx, *authMethod, *issuer, *clientID, *clientSecret, *projectID, *keyPath, *token)
+	if err != nil {
+		return fmt.Errorf("obtain device token: %w", err)
 	}
 
 	conn, err := grpc.NewClient(*target, grpc.WithTransportCredentials(insecure.NewCredentials()))
@@ -294,8 +319,12 @@ func runSimulate(ctx context.Context, log *slog.Logger, args []string) error {
 	defer conn.Close()
 
 	// Devices authenticate with a bearer token the same way any client does.
-	if *token != "" {
-		ctx = metadata.AppendToOutgoingContext(ctx, "authorization", "Bearer "+*token)
+	if bearer != "" {
+		ctx = metadata.AppendToOutgoingContext(ctx, "authorization", "Bearer "+bearer)
+		log.Info("device authenticated", "method", *authMethod)
+	} else {
+		log.Warn("no device credentials configured — streaming without a token " +
+			"(succeeds only if the telemetry service runs with AUTH_MODE=disabled)")
 	}
 
 	stream, err := telemetryv1.NewVitalsServiceClient(conn).StreamVitals(ctx)
@@ -334,6 +363,68 @@ func runSimulate(ctx context.Context, log *slog.Logger, args []string) error {
 	log.Info("simulation finished", "accepted", reply.GetAccepted(), "rejected", reply.GetRejected())
 
 	return nil
+}
+
+// deviceToken resolves the bearer token a simulated device presents, per the
+// selected onboarding method. An explicit -token wins (a PAT or any pre-minted
+// token). Otherwise the method-specific source mints one. When nothing is
+// configured it returns "" so the simulator can still run tokenless against a
+// telemetry service in AUTH_MODE=disabled.
+func deviceToken(
+	ctx context.Context,
+	method, issuer, clientID, clientSecret, projectID, keyPath, staticToken string,
+) (string, error) {
+	if staticToken != "" {
+		return devauth.Static{Value: staticToken}.Token(ctx)
+	}
+
+	switch method {
+	case "", "client_credentials":
+		// Nothing configured: run tokenless (auth-disabled local mode).
+		if issuer == "" && clientID == "" && clientSecret == "" {
+			return "", nil
+		}
+
+		return devauth.ClientCredentials{
+			Issuer: issuer, ClientID: clientID, ClientSecret: clientSecret, ProjectID: projectID,
+		}.Token(ctx)
+
+	case "jwt_profile":
+		return devauth.JWTProfile{Issuer: issuer, KeyPath: keyPath, ProjectID: projectID}.Token(ctx)
+
+	case "static":
+		return "", errors.New("auth-method=static requires -token (a PAT or pre-minted token)")
+
+	default:
+		return "", fmt.Errorf("unknown auth-method %q (want client_credentials, jwt_profile or static)", method)
+	}
+}
+
+// serveHealth runs a tiny HTTP server exposing /healthz for the liveness probe
+// of port-less roles (the writer). It reports OK while the process is alive;
+// the process exits (and is restarted) on any fatal error in the main loop, so
+// "answering" is a sufficient liveness signal here. Shuts down with ctx.
+func serveHealth(ctx context.Context, log *slog.Logger, addr string) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/healthz", func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("ok"))
+	})
+
+	srv := &http.Server{Addr: addr, Handler: mux, ReadHeaderTimeout: 5 * time.Second}
+
+	go func() {
+		<-ctx.Done()
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		_ = srv.Shutdown(shutdownCtx)
+	}()
+
+	go func() {
+		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			log.Error("health server stopped", "error", err)
+		}
+	}()
 }
 
 func env(key, fallback string) string {

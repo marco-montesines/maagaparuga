@@ -70,12 +70,27 @@ spec:
           ports:
             - name: http
               containerPort: 8080
+          # Octane boots a worker pool + warms config/routes; startup gates
+          # liveness (up to ~2m) so first boot is never read as a hang.
+          startupProbe:
+            httpGet:
+              path: /up
+              port: http
+            periodSeconds: 5
+            failureThreshold: 24
           readinessProbe:
             httpGet:
               path: /up
               port: http
             initialDelaySeconds: 10
             periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /up
+              port: http
+            periodSeconds: 15
+            timeoutSeconds: 5
+            failureThreshold: 4
           resources:
             requests:
               cpu: 100m
@@ -193,11 +208,19 @@ spec:
           ports:
             - name: grpc
               containerPort: 9090
+          # The gRPC health service is registered and left unauthenticated
+          # (Public in the auth interceptor) exactly so probes need no token.
           readinessProbe:
-            tcpSocket:
-              port: grpc
+            grpc:
+              port: 9090
             initialDelaySeconds: 5
             periodSeconds: 10
+          livenessProbe:
+            grpc:
+              port: 9090
+            periodSeconds: 15
+            timeoutSeconds: 5
+            failureThreshold: 4
           resources:
             requests:
               cpu: 100m
@@ -244,6 +267,25 @@ spec:
                 secretKeyRef:
                   name: clickhouse-credentials
                   key: password
+          ports:
+            - name: health
+              containerPort: 9091
+          # The writer has no service port; the `write` command runs a tiny
+          # /healthz server (HEALTH_ADDR) purely so the consumer has a liveness
+          # signal — a process that stops draining but stays up is restarted.
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: health
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: health
+            periodSeconds: 15
+            timeoutSeconds: 3
+            failureThreshold: 4
           resources:
             requests:
               cpu: 100m

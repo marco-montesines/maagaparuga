@@ -118,12 +118,29 @@ spec:
               memory: 384Mi
             limits:
               memory: 768Mi
+          # First-instance init runs DB migrations + eventstore setup, which is
+          # slow; startup gates liveness (up to ~5m) so init is never killed.
+          startupProbe:
+            httpGet:
+              path: /debug/healthz
+              port: http
+            periodSeconds: 10
+            failureThreshold: 30
           readinessProbe:
             httpGet:
               path: /debug/ready
               port: http
             initialDelaySeconds: 20
             periodSeconds: 10
+          # Liveness uses /debug/healthz (process alive), weaker than the
+          # /debug/ready readiness (dependencies reachable).
+          livenessProbe:
+            httpGet:
+              path: /debug/healthz
+              port: http
+            periodSeconds: 15
+            timeoutSeconds: 3
+            failureThreshold: 4
           volumeMounts:
             - name: machinekey
               mountPath: /machinekey

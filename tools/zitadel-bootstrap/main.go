@@ -53,12 +53,13 @@ var users = []struct {
 }
 
 type output struct {
-	ProjectID          string `json:"project_id"`
-	WebClientID        string `json:"web_client_id"`
-	WebClientSecret    string `json:"web_client_secret"`
-	TelemetryUserID    string `json:"telemetry_user_id"`
-	TelemetryClientID  string `json:"telemetry_client_id"`
-	TelemetryProjectID string `json:"telemetry_project_id"`
+	ProjectID             string `json:"project_id"`
+	WebClientID           string `json:"web_client_id"`
+	WebClientSecret       string `json:"web_client_secret"`
+	TelemetryUserID       string `json:"telemetry_user_id"`
+	TelemetryClientID     string `json:"telemetry_client_id"`
+	TelemetryClientSecret string `json:"telemetry_client_secret"`
+	TelemetryProjectID    string `json:"telemetry_project_id"`
 }
 
 func main() {
@@ -174,25 +175,40 @@ func run(ctx context.Context, issuer, endpoint, keyPath, redirect, postLogout, u
 		log.Printf("web app: client %s", webApp.ClientID)
 	}
 
-	// 4. Telemetry service account (device tokens carry this project's audience).
-	var telUser struct {
-		UserID string `json:"userId"`
+	// 4. Telemetry service account — the identity mock IoMT devices present.
+	//
+	// Device tokens are just ZITADEL-signed JWTs; the telemetry service verifies
+	// them against the JWKS regardless of HOW they were obtained. So the account
+	// is provisioned to support multiple onboarding flows for IoMT research:
+	//   - client credentials (M2M): the secret generated here (the default),
+	//   - JWT-profile: add a machine key to this same account,
+	//   - PAT: mint a personal access token for it.
+	// The token's `sub` is this account's user id — the subject OpenFGA
+	// authorizes as a `device` on each care recipient — so it is emitted for the
+	// tuple sync. The token carries the project audience (out.TelemetryProjectID)
+	// via the reserved project-aud scope the device requests.
+	telUserID, err := ensureMachineUser(ctx, api, "telemetry-device",
+		"Telemetry Device", "Service account for mock IoMT device ingest")
+	if err != nil {
+		return fmt.Errorf("telemetry service account: %w", err)
 	}
-	if code, err := api.call(ctx, "/management/v1/users/machine", map[string]any{
-		"userName":        "telemetry-device",
-		"name":            "Telemetry Device",
-		"description":     "Service account for mock IoMT device ingest",
-		"accessTokenType": "ACCESS_TOKEN_TYPE_JWT",
-	}, &telUser); err != nil {
-		if code != 409 {
-			return fmt.Errorf("create telemetry service account: %w", err)
-		}
-		log.Printf("telemetry service account already exists")
-	} else {
-		out.TelemetryUserID = telUser.UserID
-		out.TelemetryClientID = telUser.UserID
-		log.Printf("telemetry service account: %s", telUser.UserID)
+	out.TelemetryUserID = telUserID
+	log.Printf("telemetry service account: %s", telUserID)
+
+	// Generate M2M client credentials (the default onboarding path). This is
+	// not idempotent — each run rotates the secret — so, like the web client
+	// secret, it is injected into the cluster at runtime and never committed.
+	var telSecret struct {
+		ClientID     string `json:"clientId"`
+		ClientSecret string `json:"clientSecret"`
 	}
+	if _, err := api.callMethod(ctx, "PUT",
+		fmt.Sprintf("/management/v1/users/%s/secret", telUserID), nil, &telSecret); err != nil {
+		return fmt.Errorf("generate telemetry client secret: %w", err)
+	}
+	out.TelemetryClientID = telSecret.ClientID
+	out.TelemetryClientSecret = telSecret.ClientSecret
+	log.Printf("telemetry M2M client: %s (secret rotated)", telSecret.ClientID)
 
 	// 5. Mock users + role grants — demonstration seed only.
 	if !seedUsers {

@@ -54,6 +54,13 @@ spec:
               port: master
             initialDelaySeconds: 10
             periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /cluster/status
+              port: master
+            periodSeconds: 15
+            timeoutSeconds: 3
+            failureThreshold: 4
           volumeMounts:
             - name: data
               mountPath: /data
@@ -120,7 +127,7 @@ spec:
               until printf "cluster.check\nexit\n" | timeout 10 weed shell -master=seaweedfs:9333 >/dev/null 2>&1; do
                 echo "still waiting..."; sleep 2
               done
-              printf 's3.bucket.create -name media\ns3.bucket.create -name attachments\ns3.bucket.create -name telemetry-archive\ns3.bucket.create -name tempo-traces\ns3.bucket.list\nexit\n' \
+              printf 's3.bucket.create -name media\ns3.bucket.create -name attachments\ns3.bucket.create -name telemetry-archive\ns3.bucket.create -name tempo-traces\ns3.bucket.create -name pg-backups\ns3.bucket.list\nexit\n' \
                 | timeout 60 weed shell -master=seaweedfs:9333
           resources:
             requests:

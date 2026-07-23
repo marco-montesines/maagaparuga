@@ -105,12 +105,27 @@ spec:
               memory: 1500Mi
             limits:
               memory: 3Gi
+          # Startup gates liveness so a slow first boot (schema, part loading)
+          # is never mistaken for a hang: up to 5 minutes to answer /ping.
+          startupProbe:
+            httpGet:
+              path: /ping
+              port: http
+            periodSeconds: 10
+            failureThreshold: 30
           readinessProbe:
             httpGet:
               path: /ping
               port: http
             initialDelaySeconds: 10
             periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /ping
+              port: http
+            periodSeconds: 15
+            timeoutSeconds: 5
+            failureThreshold: 4
           volumeMounts:
             - name: data
               mountPath: /var/lib/clickhouse

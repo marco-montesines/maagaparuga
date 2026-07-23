@@ -125,7 +125,7 @@ func (s *Server) StreamVitals(stream telemetryv1.VitalsService_StreamVitalsServe
 
 		recipient := sample.GetCareRecipientId()
 		if !allowed[recipient] {
-			if err := s.authorize(ctx, authz.RelationEditor, recipient); err != nil {
+			if err := s.authorize(ctx, authz.RelationVitalsWriter, recipient); err != nil {
 				// Authorization failures are terminal for the stream: a caller
 				// writing for a recipient it may not touch is not a flaky
 				// sensor, it is a rejected identity.
@@ -159,7 +159,7 @@ func (s *Server) PublishVitals(
 		return nil, status.Error(codes.InvalidArgument, err.Error())
 	}
 
-	if err := s.authorize(ctx, authz.RelationEditor, sample.GetCareRecipientId()); err != nil {
+	if err := s.authorize(ctx, authz.RelationVitalsWriter, sample.GetCareRecipientId()); err != nil {
 		return nil, err
 	}
 

@@ -67,11 +67,26 @@ spec:
               memory: 1Gi
             limits:
               memory: 1536Mi
+          # OpenSearch's JVM + shard recovery can take minutes on first boot;
+          # startup gates liveness so that is never read as a hang (up to ~5m).
+          startupProbe:
+            tcpSocket:
+              port: http
+            periodSeconds: 10
+            failureThreshold: 30
           readinessProbe:
             tcpSocket:
               port: http
             initialDelaySeconds: 30
             periodSeconds: 10
+          # Liveness stays a lightweight port check, NOT cluster health: a
+          # yellow/red cluster is a readiness concern, the node is still alive.
+          livenessProbe:
+            tcpSocket:
+              port: http
+            periodSeconds: 20
+            timeoutSeconds: 5
+            failureThreshold: 4
           volumeMounts:
             - name: data
               mountPath: /usr/share/opensearch/data

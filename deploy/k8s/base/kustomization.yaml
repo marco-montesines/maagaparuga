@@ -16,6 +16,8 @@ resources:
   - openfga/openfga.yaml
   - apisix/apisix.yaml
   - apps/apps.yaml
+  - observability/prometheus.yaml
+  - observability/grafana.yaml
 
 # Version policy (ADR 0013): every image pinned to an exact current stable
 # release, bumped by automated dependency updates. Manifests use the tag
@@ -41,6 +43,10 @@ images:
     newTag: 3.17.0-debian
   - name: busybox
     newTag: 1.38.0
+  - name: prom/prometheus
+    newTag: v3.1.0
+  - name: grafana/grafana
+    newTag: 11.4.0
   # Application images are built from this repository (P2-P4).
   - name: ghcr.io/marco-montesines/maagaparuga-web
     newTag: dev

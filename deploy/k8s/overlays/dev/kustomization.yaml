@@ -56,6 +56,26 @@ secretGenerator:
       - ZITADEL_CLIENT_ID=
       - ZITADEL_CLIENT_SECRET=
       - ZITADEL_REDIRECT_URI=http://maagaparuga.test:9080/auth/callback
+  # Device (M2M) credentials the simulator presents as an IoMT device. Empty
+  # until `make dev-device-auth` injects the values the bootstrap emitted —
+  # never committed, exactly like the web client secret.
+  - name: telemetry-secrets
+    literals:
+      - DEVICE_CLIENT_ID=
+      - DEVICE_CLIENT_SECRET=
+  # S3 credentials CNPG uses to archive Postgres to the in-cluster SeaweedFS.
+  # Dev-only well-known creds matching seaweedfs-s3-config.json (the `dev`
+  # identity); cloud overlays provide real, provisioned credentials (P6).
+  - name: pg-backup-s3
+    literals:
+      - ACCESS_KEY_ID=dev-maagaparuga
+      - ACCESS_SECRET_KEY=dev-seaweedfs-secret
+  # Grafana admin login (dev-only, well-known). Cloud overlays provision a real
+  # password (P6).
+  - name: grafana-admin
+    literals:
+      - username=admin
+      - password=dev-grafana-admin
 
 generatorOptions:
   disableNameSuffixHash: true   # stable names so base manifests can reference them
@@ -75,11 +95,18 @@ configMapGenerator:
   - name: telemetry-config
     behavior: merge
     literals:
+      # Default off so `make dev` brings up a working stack with no identity
+      # wiring; `make dev-device-auth` flips this to jwt and fills the audience
+      # + store below (same opt-in pattern as browser login needing
+      # dev-bootstrap). The service warns loudly on every start while disabled.
       - AUTH_MODE=disabled
       - OPENFGA_STORE_ID=
       - OPENFGA_MODEL_ID=
-      # Token issuer once auth is live (matches the single-host issuer).
+      # Token issuer (matches the single-host issuer) + audience. The audience
+      # is the MaagapAruga project id ZITADEL puts in a device token's `aud`;
+      # dev-device-auth sets it from the bootstrap output.
       - OIDC_ISSUER=http://maagaparuga.test:9080
+      - OIDC_AUDIENCE=
 
 patches:
   # Single-host issuer for dev browser login: ZITADEL's external domain is the

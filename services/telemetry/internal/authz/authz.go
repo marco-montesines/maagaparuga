@@ -18,8 +18,9 @@ import (
 
 // Relations mirror fga/model.fga.
 const (
-	RelationViewer = "viewer" // read a care recipient's data
-	RelationEditor = "editor" // write clinical content (staff only)
+	RelationViewer       = "viewer"        // read a care recipient's data
+	RelationEditor       = "editor"        // write clinical content (staff only)
+	RelationVitalsWriter = "vitals_writer" // stream vitals (assigned staff or a device)
 )
 
 // ErrDenied is returned when the relationship does not hold. Transport and
