@@ -594,6 +594,9 @@ authentication on the API routes. Production runs as a 3-node HA cluster with st
 mirroring it as an ephemeral rehearsal (see [Environments](#environments)); larger
 deployments are a change of node count, not a rewrite.
 
+Where the platform is headed **beyond this initial build** — the research and
+feature directions — is in **[ROADMAP.md](ROADMAP.md)**.
+
 ## Research lineage
 
 MaagapAruga is inspired by a line of systems in the same domain going back to **2007**.
