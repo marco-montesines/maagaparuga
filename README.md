@@ -432,9 +432,14 @@ IaC conventions in this repository:
   convention, real values live in gitignored files / GitHub environment secrets.
 - **Least exposure at the edge** — cloud VMs (Ubuntu LTS) are firewalled with
   **Hetzner Cloud Firewalls, default-deny inbound**: only 80/443 (the APISIX
-  gateway) are world-reachable; SSH is restricted to an admin IP allow-list
-  supplied per environment (never committed); the Kubernetes API stays closed
-  (SSH tunnel access). Data stores, broker, and identity services are never
+  gateway) are world-reachable; **SSH runs on a non-default port (10022)** and is
+  restricted to an admin IP allow-list supplied per environment (never
+  committed) — `sshd` is configured for 10022 by the Ansible base-hardening role,
+  and the firewall opens 10022 (not 22) to the allow-list, which cuts out the
+  constant background noise against port 22. **Key-only SSH** (password + root
+  login disabled) is the real brute-force defence; **fail2ban** (SSH jail on
+  10022) is enabled as defence-in-depth on top. The Kubernetes API stays closed
+  (SSH-tunnel access). Data stores, broker, and identity services are never
   exposed publicly — each environment gets its **own dedicated Hetzner private
   network** (distinct address ranges per environment), Kubernetes binds to the
   private interface, and all system-internal traffic stays on it; the public
