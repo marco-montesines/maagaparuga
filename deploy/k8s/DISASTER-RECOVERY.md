@@ -43,17 +43,22 @@ Ransomware today targets backups first. Controls, in priority order:
    (or restic append-only repos): a backup, once written, cannot be modified or
    deleted before its retention expires, **even with admin credentials**. This
    is the single most important control and the one dev cannot fully model
-   (in-cluster SeaweedFS shares the node) — cloud overlays (P6) target storage
-   with real Object Lock (AWS S3 / Backblaze B2 / Wasabi).
+   (in-cluster SeaweedFS shares the node) — cloud overlays (P6) target
+   **Backblaze B2** (Object-Lock/WORM, cheap). *DigitalOcean Spaces was
+   considered for cross-provider separation but has no Object Lock (verified
+   2026), so it can't be the sole immutable target.*
 2. **Separate, write-only credentials** — the cluster's backup credential can
    `PutObject` but not `DeleteObject`/`PutBucketLifecycle`. Deletion/expiry is a
    separate identity the app never holds. (Dev uses a full-access dev key for
    simplicity; P6 splits it.)
 3. **Client-side encryption** — backups encrypted before they leave the cluster
    (restic native; barman `encryption`), so an offsite copy leaks nothing.
-4. **Offsite / off-node** — dev backs up to in-cluster SeaweedFS on the *same
-   node*: this proves the mechanism, **not** DR. P6 repoints
-   `destinationPath`/`endpointURL` at durable, off-cluster storage.
+4. **Offsite / off-*provider*** — dev backs up to in-cluster SeaweedFS on the
+   *same node*: this proves the mechanism, **not** DR. P6 repoints
+   `destinationPath`/`endpointURL` at **Backblaze B2 — a different provider from
+   the Hetzner core**, so a compromise or outage of the primary cloud account
+   cannot take the platform *and* its backups at once. (Backup target provider is
+   an IaC choice decoupled from the core-infra provider.)
 5. **MFA-delete / air-gapped pull** — expiry requires MFA; ideally a separate,
    isolated system *pulls* backups so a full cluster compromise cannot reach
    them.

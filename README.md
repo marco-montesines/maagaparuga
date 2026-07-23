@@ -149,7 +149,7 @@ flowchart LR
         lake[("SeaweedFS<br/>S3 data lake — media originals,<br/>attachments, raw telemetry archive")]
     end
 
-    backup[("Immutable off-node backup store<br/>Object-Lock / WORM · write-only creds<br/>ransomware-resistant · IaC-provisioned")]
+    backup[("Immutable backup store — <b>different provider</b> (Backblaze B2)<br/>Object-Lock / WORM · write-only creds<br/>ransomware-resistant · IaC-provisioned")]
 
     users -- "login: OIDC + PKCE" --> gw
     sim -- "gRPC streaming<br/>(REST via gateway transcoding)" --> gw
@@ -294,10 +294,14 @@ storage, so a backup cannot be altered or deleted before its retention expires *
 with stolen admin credentials* — the single most important control; **separate,
 write-only backup credentials** (the platform can *write* a backup but cannot *delete*
 one, so a compromised cluster cannot wipe its own restore points); client-side
-encryption; **off-node / offsite** copies (the 3-2-1-1-0 rule); MFA-delete or an
-air-gapped pull; and a **backup-failure alert** so a missing backup pages you instead of
-surprising you at restore time. Recovery is always into a *new* cluster — the
-corrupted volume is left intact for forensics.
+encryption; **a different provider** for the offsite copy — **Backblaze B2** (chosen
+because it is a separate provider from the Hetzner core *and* supports Object-Lock;
+DigitalOcean Spaces was considered for the separation but has no Object Lock), so a
+compromise or outage of the primary cloud account can't take the platform *and* its
+backups at once (the 3-2-1-1-0 rule); MFA-delete or an air-gapped pull; and a
+**backup-failure alert** so a missing backup pages you instead of surprising you at
+restore time. Recovery is always into a *new* cluster — the corrupted volume is left
+intact for forensics.
 
 **This is where Infrastructure as Code earns its place.** These controls are not
 application config — they are *infrastructure*: the immutable, off-cluster object store,
@@ -305,7 +309,9 @@ its Object-Lock / lifecycle policy, and the split write-only backup identity are
 **provisioned and version-controlled by the IaC** per environment, so disaster recovery
 is reproducible and auditable rather than a manual runbook someone hopes was followed.
 Local dev backs up to the in-cluster object store to prove the *mechanism*; the cloud
-overlays repoint it at durable, immutable, off-node storage for real DR.
+overlays repoint it at **Backblaze B2 — a different provider from the Hetzner core** —
+for real, off-provider, immutable DR. (Backup provider is an IaC choice, decoupled from
+where the core infra runs.)
 
 ## Repository layout
 
@@ -386,10 +392,13 @@ flowchart LR
         approval["manual approval"]
     end
 
-    subgraph hetzner["Hetzner Cloud"]
+    subgraph hetzner["Hetzner Cloud (core infra)"]
         stg["staging cluster<br/>3 nodes (ephemeral)"]
         prd["production cluster<br/>3 nodes (HA)"]
-        dr[("immutable off-node backup store<br/>Object-Lock / WORM · ransomware-resistant<br/>Hetzner Object Storage / external S3")]
+    end
+
+    subgraph offsite["Backblaze B2 — different provider (offsite backups)"]
+        dr[("immutable backup store<br/>Object-Lock / WORM · write-only creds<br/>ransomware-resistant")]
     end
 
     validate --> guard --> approval
@@ -430,12 +439,14 @@ IaC conventions in this repository:
   network** (distinct address ranges per environment), Kubernetes binds to the
   private interface, and all system-internal traffic stays on it; the public
   interface exists solely for the gateway and allow-listed SSH.
-- **Disaster recovery is provisioned, not improvised** — the durable, off-node object
-  store that backups land in, its **Object-Lock / immutability + lifecycle** policy, and
-  the **write-only backup identity** (can write a backup, cannot delete one) are all IaC,
-  per environment. That is what makes the ransomware-resistant, restore-tested recovery
-  described under [Resilience](#resilience--backups--disaster-recovery) reproducible and
-  auditable instead of a manual runbook.
+- **Disaster recovery is provisioned, not improvised** — the **off-provider** backup
+  store (Backblaze B2, a different provider from the Hetzner core), its **Object-Lock /
+  immutability + lifecycle** policy, and the **write-only backup identity** (can write a
+  backup, cannot delete one) are all IaC, per environment. The backup provider is
+  decoupled from the core-infra provider — a deliberate "don't keep the platform and its
+  backups in one basket" split. That is what makes the ransomware-resistant,
+  restore-tested recovery under [Resilience](#resilience--backups--disaster-recovery)
+  reproducible and auditable instead of a manual runbook.
 - **Readable on purpose** — generously commented, beginner-followable HCL: the modules
   double as documentation of the platform's shape.
 
@@ -479,7 +490,10 @@ flowchart LR
 ## Observability & actionable alerting
 
 Metrics, traces, and logs all land in **Grafana** as the single pane — for the platform
-infrastructure and for the system itself:
+infrastructure and for the system itself. *(Current state: Prometheus + Grafana unified
+alerting are deployed, with the backup-failure alert live and provisioned as code; the
+OpenTelemetry tracing path, Tempo, and the full exporter set are the next slice of this
+tier. The design below is the target.)*
 
 ```mermaid
 flowchart LR
@@ -565,11 +579,15 @@ Cost is treated as a first-class operational signal, right-sized to the actual l
 
 ## Status
 
-Active development. The infrastructure baseline, the web application, and the telemetry
-service are in place; the assessment and media services are next. Production runs as a 3-node
-HA cluster with staging mirroring it as an ephemeral rehearsal (see
-[Environments](#environments)); larger deployments are a change of node count, not a
-rewrite.
+Active development. In place: the infrastructure baseline, the web application (browser
+login via OIDC), and the telemetry service (device authentication + per-care-recipient
+authorization). The assessment and media services are next. Operational groundwork lands
+alongside the services rather than after — liveness/startup probes across the workloads,
+PostgreSQL continuous backup to object storage with a **verified** restore, a
+backup-failure alert (Prometheus + Grafana unified alerting), and gateway edge
+authentication on the API routes. Production runs as a 3-node HA cluster with staging
+mirroring it as an ephemeral rehearsal (see [Environments](#environments)); larger
+deployments are a change of node count, not a rewrite.
 
 ## Research lineage
 

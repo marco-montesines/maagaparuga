@@ -49,10 +49,17 @@ append-only protection.)
 | **Object-Lock / WORM + write-only backup identity** ✅ | A backup, once written, **cannot be altered or deleted before retention expires — even with stolen admin credentials**; the platform's backup credential can *write* but not *delete*, so a compromised cluster cannot wipe its own restore points |
 
 **Backup target location:** in-cluster/same-node proves the *mechanism* only (it
-shares the failure domain — not DR); the real target is **durable, off-node,
-immutable object storage** (Hetzner Object Storage or external S3 with Object
-Lock), provisioned by IaC. A second, separate provider/account for true
-air-gapped separation is noted as the stronger posture.
+shares the failure domain — not DR). The target must be **durable, off-node,
+immutable, and on a *different provider*** from the core infra — so a compromise
+or outage of the primary cloud account cannot take the platform *and* its
+backups at once (the "offsite" leg of 3-2-1-1-0). Provisioned by IaC.
+
+| Offsite provider | Assessment |
+|---|---|
+| Same provider, another bucket/region ❌ | Solves node loss, not provider-account compromise or provider outage — still one basket |
+| **DigitalOcean Spaces** ❌ | Different provider ✓, simple, cheap — but **no S3 Object Lock / WORM** (verified 2026), so a stolen full key can still delete backups; only client-side (restic) protection is possible |
+| **Backblaze B2** ✅ | **Different provider ✓ AND Object-Lock / WORM ✓**, typically the cheapest S3-compatible option — satisfies cross-provider separation *and* immutability at once |
+| Wasabi | Also different-provider + Object-Lock; flat no-egress pricing — the alternative if that pricing model fits better |
 
 ## Decision
 
@@ -75,10 +82,18 @@ offsite** copies (3-2-1-1-0); MFA-delete or air-gapped pull; and a
 instead of surprising you at restore time
 ([runbook](../runbooks/backup-failure.md)).
 
-**The DR substrate is provisioned by IaC** (ADR 0012): the immutable off-node
-object store, its Object-Lock/lifecycle policy, and the write-only backup
-identity are version-controlled infrastructure per environment — reproducible and
-auditable, not a manual runbook. Full strategy:
+**Offsite target: Backblaze B2** — a *different provider* from the Hetzner core
+(so the primary account/provider and the backups never share a blast radius) that
+*also* supports Object-Lock/WORM. DigitalOcean Spaces was considered for the
+cross-provider separation but rejected as the sole target because it has no Object
+Lock. `restic` still provides client-side encryption + append-only on top.
+
+**The DR substrate is provisioned by IaC** (ADR 0012): the immutable off-provider
+bucket, its Object-Lock/lifecycle policy, and the write-only backup identity are
+version-controlled infrastructure per environment — reproducible and auditable,
+not a manual runbook. This decouples cleanly from the core-infra provider choice
+(the cluster + private network is one placement decision; the backup target is
+another) — a hybrid, provider-portable topology. Full strategy:
 [deploy/k8s/DISASTER-RECOVERY.md](../../deploy/k8s/DISASTER-RECOVERY.md).
 
 ## Consequences
