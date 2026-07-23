@@ -522,7 +522,7 @@ copyright-protected material from those systems is included in this repository.
 | Year | System | Historical influence |
 |---|---|---|
 | **2007** | **TMIS** — Telemedicine Management Information System | The foundation: care-team role model and structured telemedicine records |
-| 2021–2022 | Successive private prototypes (Python, then Go) | Vitals ingest from IoT devices, per-vital APIs, early-warning-score concepts |
+| 2021–2022 | Successive prototypes (Python, then Go) | Vitals ingest from IoT devices, per-vital APIs, early-warning-score concepts |
 | **2023** | **SEDS** — Stress and Emotion Detection System | IoMT ingest → fuzzy-logic risk levels → automatic referral; questionnaire-based assessment |
 | **2024** | **BTMS** — Biotelemetry and Telemedicine System | Biotelemetry breadth: NEWS2 early-warning scoring, DASS21 questionnaires, anthropometric profiles |
 | **2026** | **MaagapAruga** (this repository) | Independent open-source implementation: new codebase, modern architecture, mock data only |
