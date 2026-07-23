@@ -31,6 +31,7 @@ reasons inspectable.
 | [0013](0013-latest-stable-pinned-versions.md) | Latest stable releases, pinned exactly | Accepted |
 | [0014](0014-microservices-failure-domains.md) | Microservices, not a monolith; failure domains stated honestly | Accepted |
 | [0015](0015-seaweedfs-object-storage.md) | SeaweedFS replaces MinIO as the object store (upstream discontinued) | Accepted |
+| [0016](0016-backup-and-disaster-recovery.md) | Backups & disaster recovery — ransomware-resistant, tested restore | Accepted |
 
 Format: lightweight [MADR](https://adr.github.io/madr/)-style. New decisions get new
 numbers; superseded ADRs are never deleted — their status changes and they link forward.

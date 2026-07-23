@@ -13,7 +13,8 @@ base/                  # every component, single-node defaults, exact image pins
   nats/                #   JetStream message broker
   zitadel/             #   OIDC identity provider
   openfga/             #   fine-grained authorization
-  apisix/              #   API gateway (standalone mode; full routes land in P5)
+  apisix/              #   API gateway (standalone; routes + P5 edge auth, TLS/rate-limit TODO)
+  observability/       #   Prometheus + Grafana (unified alerting; backup-failure alert)
   apps/                #   app-service shells (images built in P2-P4)
 overlays/
   dev/                 # minikube: dev-only creds; web + telemetry live, assessment/media at 0

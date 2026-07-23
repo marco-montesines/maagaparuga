@@ -37,7 +37,9 @@ php artisan test           # Pest, in-memory SQLite
 # Against the minikube stack (make dev + port-forwards):
 php artisan migrate:fresh --seed
 php artisan fga:bootstrap  # once; then set OPENFGA_STORE_ID/MODEL_ID in .env
-php artisan fga:sync
+php artisan fga:sync                        # staff/owner tuples from the database
+php artisan fga:device <sa-id> 1 2 3 4      # grant an IoMT device the `device` relation
+                                            # on care recipients (device -> vitals_writer)
 ```
 
 All seed data is **fictitious** (see `data/mock/README.md`).

@@ -63,7 +63,7 @@ data:
                 PostgreSQL backup FAILED for {{ $labels.cnpg_cluster }} — the last
                 failed backup is newer than the last successful one. Recovery
                 point is not advancing.
-              runbook: deploy/k8s/DISASTER-RECOVERY.md
+              runbook: docs/runbooks/backup-failure.md
             data:
               - refId: A
                 relativeTimeRange: {from: 600, to: 0}

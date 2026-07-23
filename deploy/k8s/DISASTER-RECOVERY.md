@@ -5,6 +5,10 @@ designed with the backup and ransomware-resistance controls a real care
 platform needs, because "how would this survive an incident?" is a first-class
 design question, not an afterthought.
 
+> Decision record: [ADR 0016](../../docs/adr/0016-backup-and-disaster-recovery.md)
+> (options considered + rejected). This document is the operational strategy;
+> the alert runbook is [docs/runbooks/backup-failure.md](../../docs/runbooks/backup-failure.md).
+
 ## Principles
 
 - **3-2-1-1-0**: ≥3 copies, on ≥2 media/systems, ≥1 offsite, ≥1 **immutable or
