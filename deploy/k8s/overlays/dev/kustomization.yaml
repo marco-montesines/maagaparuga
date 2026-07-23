@@ -151,13 +151,13 @@ patches:
       - op: add
         path: /spec/template/spec/containers/0/args/-
         value: -seed-mock-users
-  # App services scale to 0 until their images exist (web + web-queue and
-  # telemetry + telemetry-writer are live; assessment -> P4,
-  # media + media-worker -> P4b).
+  # App services scale to 0 until their images exist (web + web-queue,
+  # telemetry + telemetry-writer, and assessment are live; media +
+  # media-worker -> P4b).
   - path: patches/apps-scale-zero.yaml
     target:
       kind: Deployment
-      name: ^(assessment|media|media-worker)$
+      name: ^(media|media-worker)$
   # Dev runs OpenSearch with the security plugin disabled (no TLS/auth noise
   # locally); cloud overlays enable security with real credentials (P6).
   - path: patches/opensearch-dev.yaml

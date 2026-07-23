@@ -293,6 +293,28 @@ spec:
             limits:
               memory: 128Mi
 ---
+# Assessment reads questionnaire_responses + writes assessment_results/alerts in
+# the app database, and reads vitals windows. VITALS_READER selects the source:
+# `clickhouse` (direct read-only query) or `grpc` (telemetry GetWindow).
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: assessment-config
+data:
+  DB_HOST: maagaparuga-pg-rw
+  DB_PORT: "5432"
+  DB_NAME: app
+  DB_USER: app
+  VITALS_READER: clickhouse
+  CLICKHOUSE_HOST: clickhouse
+  CLICKHOUSE_PORT: "8123"
+  CLICKHOUSE_DB: maagaparuga
+  CLICKHOUSE_USER: maagaparuga     # dev: the existing CH user; a read-only user is P6
+  WINDOW_MINUTES: "60"
+  WINDOW_LIMIT: "500"
+  # gRPC reader (VITALS_READER=grpc): TELEMETRY_GRPC + TELEMETRY_TOKEN injected at runtime.
+  TELEMETRY_GRPC: telemetry:9090
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -311,15 +333,48 @@ spec:
       containers:
         - name: assessment
           image: ghcr.io/marco-montesines/maagaparuga-assessment:pinned
+          envFrom:
+            - configMapRef:
+                name: assessment-config
+          env:
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: maagaparuga-pg-app
+                  key: password
+            - name: CLICKHOUSE_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: clickhouse-credentials
+                  key: password
           ports:
             - name: http
               containerPort: 8000
+          startupProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            periodSeconds: 5
+            failureThreshold: 24
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            periodSeconds: 15
+            timeoutSeconds: 3
+            failureThreshold: 4
           resources:
             requests:
               cpu: 100m
-              memory: 128Mi
-            limits:
               memory: 256Mi
+            limits:
+              memory: 512Mi
 ---
 apiVersion: v1
 kind: Service
