@@ -11,6 +11,7 @@ NAMESPACE       := maagaparuga
 DEV_OVERLAY     := deploy/k8s/overlays/dev
 COMPOSE_STORES  := deploy/compose/stores.compose.yml
 TELEMETRY_IMAGE := ghcr.io/marco-montesines/maagaparuga-telemetry:dev
+WEB_IMAGE       := ghcr.io/marco-montesines/maagaparuga-web:dev
 
 # CloudNativePG operator — pinned release manifest (ADR 0005, 0013).
 CNPG_VERSION  ?= 1.30.0
@@ -123,6 +124,12 @@ dev-seed: ## Load mock data (users already seeded by bootstrap; this adds record
 	kubectl -n $(NAMESPACE) exec deploy/web -- php artisan db:seed --force
 	kubectl -n $(NAMESPACE) exec deploy/web -- php artisan fga:sync
 	$(MAKE) dev-simulate SAMPLES=48
+
+.PHONY: web-rebuild
+web-rebuild: ## Rebuild the web app image from apps/web and roll the deployment (dev has no live code mount)
+	eval $$(minikube docker-env) && docker build -t $(WEB_IMAGE) apps/web
+	kubectl -n $(NAMESPACE) rollout restart deployment/web
+	kubectl -n $(NAMESPACE) rollout status deployment/web --timeout=180s
 
 .PHONY: dev-dns
 dev-dns: ## Make the cluster resolve maagaparuga.test -> the APISIX gateway (single-host OIDC issuer)
