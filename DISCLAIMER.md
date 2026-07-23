@@ -40,3 +40,10 @@ Computing Foundation (Kubernetes, k3s), Hetzner, Docker, HashiCorp, the OpenTofu
 Red Hat/Ansible, Gruntwork (Terragrunt), MinIO Inc., or any other vendor, product, or
 organization mentioned in the documentation. All trademarks are the property of their
 respective owners.
+
+The earlier systems named in the README's research-lineage section are referenced solely
+to document the historical evolution of the underlying research. MaagapAruga is an
+independently developed implementation containing newly written source code and mock data
+only; reference to that earlier research does **not** imply endorsement, affiliation,
+collaboration, sponsorship, or responsibility by any researcher, clinician, institution,
+or funding organization associated with those systems.

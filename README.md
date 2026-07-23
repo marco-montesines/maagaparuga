@@ -18,7 +18,7 @@ under applicable law (including EU MDR 2017/745 and GDPR) and must perform their
 conformity assessment. See [DISCLAIMER.md](DISCLAIMER.md).
 
 The framework itself is **engineered to production standards and genuinely deployable** —
-real high-availability infrastructure, real security, real data handling. The *data* it
+real high-availability infrastructure, real security controls, real data handling. The *data* it
 ships with is fictitious mock data; the *platform* is not. That engineering quality is
 exactly why the line above matters: *because* the software is capable of running a real
 care workload, the legal and regulatory responsibility for any such deployment —
@@ -58,7 +58,7 @@ the alternatives considered and why they lost.
 | Runtime platform | **Kubernetes everywhere** — minikube (dev), k3s (cloud) | Identical manifests in every environment; only overlay variables differ |
 | API gateway | **Apache APISIX** | The most complete OSS gateway today: OIDC plugin, native gRPC proxy + transcoding, rate limiting, TLS |
 | Identity / authorization | **ZITADEL** (OIDC + PKCE) / **OpenFGA** (relationship-based) | Standards-based login enforced at the gateway; "who may see which care recipient" as data, not code |
-| Web application | **Laravel + Octane on FrankenPHP** | Productive, battle-tested product framework; worker mode plus selected PHP functions implemented in Go |
+| Web application | **Laravel + Octane on FrankenPHP** | Productive, mature, widely deployed product framework; worker mode plus selected PHP functions implemented in Go |
 | Services | **Go** telemetry (gRPC-first) · **Python** assessment · **Python** media | Each language where it's strongest: throughput, scientific scoring, ML/media tooling |
 | API styles | **REST + gRPC + GraphQL (BFF)** | Each where it earns its place — see [Three API styles](#architecture) |
 | Message broker | **NATS JetStream** | Decouples device ingest from processing; tiny footprint; MQTT-capable; claim-check + batching patterns |
@@ -527,9 +527,9 @@ copyright-protected material from those systems is included in this repository.
 | **2024** | **BTMS** — Biotelemetry and Telemedicine System | Biotelemetry breadth: NEWS2 early-warning scoring, DASS21 questionnaires, anthropometric profiles |
 | **2026** | **MaagapAruga** (this repository) | Independent open-source implementation: new codebase, modern architecture, mock data only |
 
-This repository reflects the evolution of research interests across TMIS, the
-subsequent prototypes, SEDS, and BTMS. MaagapAruga is an independent implementation
-written in 2026 using a new codebase.
+This repository reflects the historical evolution of the underlying research across
+TMIS, the subsequent prototypes, SEDS, and BTMS. MaagapAruga is an independent
+implementation written in 2026 using a new codebase.
 
 The projects listed above are referenced solely to document the historical evolution
 of the underlying research. MaagapAruga is an independently developed open-source
