@@ -53,13 +53,16 @@ var users = []struct {
 }
 
 type output struct {
-	ProjectID             string `json:"project_id"`
-	WebClientID           string `json:"web_client_id"`
-	WebClientSecret       string `json:"web_client_secret"`
-	TelemetryUserID       string `json:"telemetry_user_id"`
-	TelemetryClientID     string `json:"telemetry_client_id"`
-	TelemetryClientSecret string `json:"telemetry_client_secret"`
-	TelemetryProjectID    string `json:"telemetry_project_id"`
+	ProjectID              string `json:"project_id"`
+	WebClientID            string `json:"web_client_id"`
+	WebClientSecret        string `json:"web_client_secret"`
+	TelemetryUserID        string `json:"telemetry_user_id"`
+	TelemetryClientID      string `json:"telemetry_client_id"`
+	TelemetryClientSecret  string `json:"telemetry_client_secret"`
+	TelemetryProjectID     string `json:"telemetry_project_id"`
+	AssessmentUserID       string `json:"assessment_user_id"`
+	AssessmentClientID     string `json:"assessment_client_id"`
+	AssessmentClientSecret string `json:"assessment_client_secret"`
 }
 
 func main() {
@@ -209,6 +212,29 @@ func run(ctx context.Context, issuer, endpoint, keyPath, redirect, postLogout, u
 	out.TelemetryClientID = telSecret.ClientID
 	out.TelemetryClientSecret = telSecret.ClientSecret
 	log.Printf("telemetry M2M client: %s (secret rotated)", telSecret.ClientID)
+
+	// 4b. Assessment service account — the identity the assessment scoring engine
+	// presents to the telemetry gRPC read API (VITALS_READER=grpc). Read-only:
+	// authorized as `service_reader` in OpenFGA (may read vitals, write nothing).
+	assessUserID, err := ensureMachineUser(ctx, api, "assessment-service",
+		"Assessment Service", "Service account for the assessment engine (read-only vitals)")
+	if err != nil {
+		return fmt.Errorf("assessment service account: %w", err)
+	}
+	out.AssessmentUserID = assessUserID
+	log.Printf("assessment service account: %s", assessUserID)
+
+	var assessSecret struct {
+		ClientID     string `json:"clientId"`
+		ClientSecret string `json:"clientSecret"`
+	}
+	if _, err := api.callMethod(ctx, "PUT",
+		fmt.Sprintf("/management/v1/users/%s/secret", assessUserID), nil, &assessSecret); err != nil {
+		return fmt.Errorf("generate assessment client secret: %w", err)
+	}
+	out.AssessmentClientID = assessSecret.ClientID
+	out.AssessmentClientSecret = assessSecret.ClientSecret
+	log.Printf("assessment M2M client: %s (secret rotated)", assessSecret.ClientID)
 
 	// 5. Mock users + role grants — demonstration seed only.
 	if !seedUsers {

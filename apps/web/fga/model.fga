@@ -21,8 +21,14 @@ type care_recipient
     # nothing else, and "which devices emit for whom" is audited on its own.
     define device: [user]
 
+    # Trusted internal read-only services (e.g. the assessment scoring engine
+    # reading vitals windows via the telemetry gRPC API). A first-class principal
+    # so a service can READ without being granted staff (which would also let it
+    # write) — least privilege, and audited on its own tuples.
+    define service_reader: [user]
+
     # Who may read the record.
-    define viewer: assigned_staff or owner
+    define viewer: assigned_staff or owner or service_reader
 
     # Who may write clinical content (notes, consultations) — staff only.
     define editor: assigned_staff

@@ -150,13 +150,40 @@ dev-device-auth: ## Turn ON device (IoMT) auth: telemetry verifies device tokens
 	kubectl -n $(NAMESPACE) patch secret telemetry-secrets --type merge \
 		-p "{\"stringData\":{\"DEVICE_CLIENT_ID\":\"$$CID\",\"DEVICE_CLIENT_SECRET\":\"$$SEC\"}}" >/dev/null; \
 	echo "Authorizing the device to stream vitals for mock recipients 1-4..."; \
-	kubectl -n $(NAMESPACE) exec deploy/web -- php artisan fga:device $$SUB 1 2 3 4; \
+	kubectl -n $(NAMESPACE) exec deploy/web -- php artisan fga:grant $$SUB device 1 2 3 4; \
 	echo "Flipping telemetry to AUTH_MODE=jwt (audience=$$PROJ)..."; \
 	kubectl -n $(NAMESPACE) patch configmap telemetry-config --type merge \
 		-p "{\"data\":{\"AUTH_MODE\":\"jwt\",\"OIDC_AUDIENCE\":\"$$PROJ\",\"OPENFGA_STORE_ID\":\"$$STORE\",\"OPENFGA_MODEL_ID\":\"$$MODEL\"}}" >/dev/null; \
 	kubectl -n $(NAMESPACE) rollout restart deployment/telemetry >/dev/null; \
 	kubectl -n $(NAMESPACE) rollout status deployment/telemetry --timeout=120s
 	@echo "Device auth ON. 'make dev-simulate' now streams as an authenticated device."
+
+.PHONY: dev-assessment-grpc
+dev-assessment-grpc: ## Switch the assessment vitals reader from ClickHouse to the telemetry gRPC API (needs a bootstrap that provisions the assessment SA + service_reader model)
+	@LOG="$$(kubectl -n $(NAMESPACE) logs job/zitadel-bootstrap 2>/dev/null)"; \
+	PROJ=$$(printf '%s' "$$LOG" | sed -n 's/.*"telemetry_project_id": "\([^"]*\)".*/\1/p'); \
+	SUB=$$(printf '%s' "$$LOG"  | sed -n 's/.*"assessment_user_id": "\([^"]*\)".*/\1/p'); \
+	CID=$$(printf '%s' "$$LOG"  | sed -n 's/.*"assessment_client_id": "\([^"]*\)".*/\1/p'); \
+	SEC=$$(printf '%s' "$$LOG"  | sed -n 's/.*"assessment_client_secret": "\([^"]*\)".*/\1/p'); \
+	ISS=$$(kubectl -n $(NAMESPACE) get cm telemetry-config -o jsonpath='{.data.OIDC_ISSUER}' 2>/dev/null); \
+	if [ -z "$$PROJ" ] || [ -z "$$SEC" ] || [ -z "$$SUB" ]; then \
+		echo "missing assessment SA in bootstrap output — rebuild the bootstrap image + 'make dev-bootstrap' first"; exit 1; fi; \
+	echo "Authorizing the assessment service to READ vitals for mock recipients 1-4 (service_reader, read-only)..."; \
+	kubectl -n $(NAMESPACE) exec deploy/web -- php artisan fga:grant $$SUB service_reader 1 2 3 4; \
+	echo "Minting the assessment M2M token (client_credentials, audience=$$PROJ)..."; \
+	TOKEN=$$(kubectl -n $(NAMESPACE) exec deploy/web -- curl -s -m10 \
+		-u "$$CID:$$SEC" \
+		-d grant_type=client_credentials \
+		--data-urlencode "scope=openid urn:zitadel:iam:org:project:id:$$PROJ:aud" \
+		"$$ISS/oauth/v2/token" \
+		| sed -n 's/.*"access_token":"\([^"]*\)".*/\1/p'); \
+	if [ -z "$$TOKEN" ]; then echo "token mint failed (is the assessment SA active?)"; exit 1; fi; \
+	echo "Injecting the bearer + flipping VITALS_READER=grpc (runtime-only, never committed)..."; \
+	kubectl -n $(NAMESPACE) set env deployment/assessment \
+		VITALS_READER=grpc TELEMETRY_GRPC=telemetry:9090 TELEMETRY_TOKEN="$$TOKEN" >/dev/null; \
+	kubectl -n $(NAMESPACE) rollout status deployment/assessment --timeout=120s
+	@echo "Assessment now reads vitals over gRPC. 'make dev-assessment' scores through that path."
+	@echo "(the token expires — re-run to refresh; 'kubectl set env deployment/assessment VITALS_READER=clickhouse TELEMETRY_TOKEN-' reverts to the tokenless default.)"
 
 .PHONY: dev-backup
 dev-backup: ## Take an on-demand Postgres base backup now (WAL archives continuously between backups)
@@ -175,6 +202,28 @@ dev-restore-verify: ## Restore DRILL: recover a throwaway cluster from the S3 ba
 	  [ "$$R" = "1" ] && break; sleep 5; done; \
 	echo "Restored app.users: $$(kubectl -n $(NAMESPACE) exec maagaparuga-pg-restore-1 -c postgres -- psql -U postgres -d app -tAc 'select count(*) from users;' 2>/dev/null | tr -d ' ')"; \
 	kubectl -n $(NAMESPACE) delete cluster maagaparuga-pg-restore >/dev/null 2>&1; echo "drill cluster torn down (S3 backups retained)"
+
+.PHONY: dev-assessment
+dev-assessment: ## Demo the assessment service end-to-end: seed a questionnaire, stream vitals, score (NEWS2/DASS-21/risk), show results + alerts (recipient 1)
+	@echo "Seeding a DASS-21 questionnaire for care recipient 1..."
+	@printf '%s\n' \
+	  "INSERT INTO questionnaire_responses (care_recipient_id, instrument, answers, submitted_at, created_at, updated_at)" \
+	  "VALUES (1, 'dass21', '{\"1\":2,\"2\":1,\"3\":3,\"4\":1,\"5\":3,\"6\":2,\"7\":1,\"8\":2,\"9\":1,\"10\":3,\"11\":2,\"12\":2,\"13\":3,\"14\":2,\"15\":1,\"16\":3,\"17\":3,\"18\":2,\"19\":1,\"20\":1,\"21\":3}', now(), now(), now());" \
+	  | kubectl -n $(NAMESPACE) exec -i maagaparuga-pg-1 -c postgres -- psql -U postgres -d app -q >/dev/null
+	@echo "Streaming fresh vitals..."
+	@$(MAKE) --no-print-directory dev-simulate SAMPLES=48 >/dev/null 2>&1 || true
+	@sleep 3
+	@echo "Scoring recipient 1 (NEWS2, DASS-21, fuzzy risk):"
+	@for kind in news2 dass21 risk; do \
+	  printf "  %-7s -> HTTP " "$$kind"; \
+	  kubectl -n $(NAMESPACE) exec deploy/web -- curl -s -m12 -o /dev/null -w '%{http_code}\n' -X POST "http://assessment:8000/assess/1/$$kind" 2>/dev/null; \
+	done
+	@echo "== assessment_results =="
+	@kubectl -n $(NAMESPACE) exec maagaparuga-pg-1 -c postgres -- psql -U postgres -d app -c \
+	  "SELECT score_type, value, risk_level FROM assessment_results WHERE care_recipient_id=1 AND computed_at > now() - interval '2 minutes' ORDER BY id;"
+	@echo "== alerts (human-review inbox) =="
+	@kubectl -n $(NAMESPACE) exec maagaparuga-pg-1 -c postgres -- psql -U postgres -d app -c \
+	  "SELECT severity, title FROM alerts WHERE care_recipient_id=1 AND created_at > now() - interval '2 minutes' ORDER BY id;"
 
 .PHONY: web-rebuild
 web-rebuild: ## Rebuild the web app image from apps/web and roll the deployment (dev has no live code mount)
