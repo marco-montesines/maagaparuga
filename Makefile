@@ -121,13 +121,22 @@ dev-bootstrap: ## Configure ZITADEL + OpenFGA and inject client id/secret + stor
 	kubectl -n $(NAMESPACE) delete job zitadel-bootstrap --ignore-not-found >/dev/null 2>&1 || true
 	kubectl apply -k $(DEV_OVERLAY) >/dev/null
 	kubectl -n $(NAMESPACE) wait --for=condition=complete job/zitadel-bootstrap --timeout=120s
-	@echo "Bootstrapping OpenFGA store + model (web app tool)..."
-	@kubectl -n $(NAMESPACE) exec deploy/web -- php artisan fga:bootstrap 2>/dev/null | grep OPENFGA_ || true
+	@echo "Bootstrapping OpenFGA store + model and injecting into web-secrets..."
+	@OUT="$$(kubectl -n $(NAMESPACE) exec deploy/web -- php artisan fga:bootstrap 2>/dev/null | grep OPENFGA_)"; \
+	STORE=$$(printf '%s' "$$OUT" | sed -n 's/.*OPENFGA_STORE_ID=\([A-Za-z0-9]*\).*/\1/p'); \
+	MODEL=$$(printf '%s' "$$OUT" | sed -n 's/.*OPENFGA_MODEL_ID=\([A-Za-z0-9]*\).*/\1/p'); \
+	if [ -n "$$STORE" ]; then \
+		kubectl -n $(NAMESPACE) patch secret web-secrets --type merge \
+			-p "{\"stringData\":{\"OPENFGA_STORE_ID\":\"$$STORE\",\"OPENFGA_MODEL_ID\":\"$$MODEL\"}}" >/dev/null; \
+		kubectl -n $(NAMESPACE) rollout restart deployment/web >/dev/null; \
+		kubectl -n $(NAMESPACE) rollout status deployment/web --timeout=180s; \
+		echo "OpenFGA store $$STORE wired into web — fga:grant + dev-device-auth + dev-media-auth now work."; \
+	else echo "WARN: could not parse the OpenFGA store id from fga:bootstrap"; fi
 	@echo "---"
-	@echo "Read the web client id/secret and store ids from:"
+	@echo "Still manual (runtime values, never committed): the ZITADEL web client"
+	@echo "id/secret + telemetry audience from"
 	@echo "  kubectl -n $(NAMESPACE) logs job/zitadel-bootstrap"
-	@echo "Then patch web-secrets + telemetry-config with them (these are runtime"
-	@echo "values, never committed), and 'make dev-seed' to load mock data."
+	@echo "Then 'make dev-seed' to load mock data."
 
 .PHONY: dev-seed
 dev-seed: ## Load mock data (users already seeded by bootstrap; this adds records + vitals + FGA tuples) — usable in ANY env to validate a deployment
