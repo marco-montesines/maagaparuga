@@ -45,10 +45,31 @@ maps cleanly onto a microservice architecture:
 MDR caution throughout: results surface to a **human-review inbox**, never an automated
 intervention. Third-party model and dataset licences are checked before any use.
 
+## Retrieval & agents
+
+The media pipeline already produces what a retrieval assistant needs — chunked,
+embedded, hybrid-searchable transcripts. As the wider field settles on hybrid retrieval
+and multi-step agents as everyday infrastructure, the on-scope extensions here are all
+**decision support for a human**, never automated action, over synthetic records only:
+
+- **Care-record retrieval assistant** — grounded question-answering over a *single*
+  recipient's own transcripts and notes, reusing the existing MiniLM embeddings and
+  OpenSearch hybrid index. Every answer cites the source segment + timestamp a reviewer
+  can open; nothing is asserted without evidence to click through to.
+- **Agentic operations, not clinical decisions** — multi-step agents for *platform*
+  chores (summarising an alert backlog for a human triage queue, drafting a shift
+  handover from the day's events), kept strictly off the clinical-decision path.
+
+Fronted by the **AI gateway** pattern below (provider abstraction, token/cost caps,
+retries, full tracing) so any model — local on Apple-Silicon/GPU or a hosted API — is
+swappable and auditable. Retrieval quality is *measured* (grounding + citation coverage)
+before any such feature leaves the demo.
+
 ## Devices & ingest
 
 A rich **IoMT device-fleet mockup**: distinct device personalities (BP monitor, pulse
-oximeter, thermometer, imaging), an **MQTT** ingest path (real fleets speak MQTT),
+oximeter, thermometer, imaging, and assistive-robotics telemetry), an **MQTT** ingest
+path (real fleets speak MQTT),
 fleet-scale load and burst profiles, and scripted scenarios that drive alert storylines
 end to end — vitals degrade, a score rises, an alert fires, it lands in the inbox.
 
