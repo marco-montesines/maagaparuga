@@ -3,6 +3,14 @@
 The worker writes segment documents (text + 384-dim MiniLM embedding); the search
 API reads them. Documents use a stable ``asset_id:index`` id so re-processing an
 asset is idempotent. opensearch-py is imported lazily.
+
+Ranking uses OpenSearch's native **hybrid query + a search pipeline** that
+**min-max normalizes** each sub-query's scores before combining them. Summing raw
+BM25 (unbounded) and cosine k-NN ([0,1]) scores would let BM25 dominate and make
+the embedding almost irrelevant; normalization puts them on one scale so lexical
+and semantic matches genuinely compete. The recipient filter is applied *inside*
+each sub-query (a k-NN pre-filter), so vector recall is not lost to a global
+top-k that gets filtered away afterwards.
 """
 
 from __future__ import annotations
@@ -13,12 +21,15 @@ from ..config import Settings
 from ..domain.models import TranscriptSegment
 from ..ports import SearchHit
 
+PIPELINE_NAME = "media-hybrid-search"
+
 
 class OpenSearchIndex:
     def __init__(self, settings: Settings | None = None) -> None:
         self._s = settings or Settings()
         self._index = self._s.opensearch_index
         self._client: Any | None = None
+        self._pipeline_ready = False
 
     def _c(self) -> Any:
         if self._client is None:
@@ -32,36 +43,57 @@ class OpenSearchIndex:
             self._client = OpenSearch(hosts=[self._s.opensearch_url], http_auth=auth)
         return self._client
 
-    def ensure_index(self) -> None:
-        """Create the knn index if absent (idempotent)."""
-        client = self._c()
-        if client.indices.exists(index=self._index):
+    def _ensure_pipeline(self) -> None:
+        """Register the normalization search pipeline (idempotent)."""
+        if self._pipeline_ready:
             return
-        client.indices.create(
-            index=self._index,
+        self._c().transport.perform_request(
+            "PUT",
+            f"/_search/pipeline/{PIPELINE_NAME}",
             body={
-                "settings": {"index": {"knn": True}},
-                "mappings": {
-                    "properties": {
-                        "asset_id": {"type": "keyword"},
-                        "care_recipient_id": {"type": "integer"},
-                        "index": {"type": "integer"},
-                        "start_ms": {"type": "integer"},
-                        "end_ms": {"type": "integer"},
-                        "text": {"type": "text"},
-                        "embedding": {
-                            "type": "knn_vector",
-                            "dimension": self._s.embedding_dims,
-                            "method": {
-                                "name": "hnsw",
-                                "engine": "lucene",
-                                "space_type": "cosinesimil",
-                            },
-                        },
+                "description": "min-max normalize + combine BM25 and k-NN scores",
+                "phase_results_processors": [
+                    {
+                        "normalization-processor": {
+                            "normalization": {"technique": "min_max"},
+                            "combination": {"technique": "arithmetic_mean"},
+                        }
                     }
-                },
+                ],
             },
         )
+        self._pipeline_ready = True
+
+    def ensure_index(self) -> None:
+        """Create the knn index + search pipeline if absent (idempotent)."""
+        client = self._c()
+        if not client.indices.exists(index=self._index):
+            client.indices.create(
+                index=self._index,
+                body={
+                    "settings": {"index": {"knn": True}},
+                    "mappings": {
+                        "properties": {
+                            "asset_id": {"type": "keyword"},
+                            "care_recipient_id": {"type": "integer"},
+                            "index": {"type": "integer"},
+                            "start_ms": {"type": "integer"},
+                            "end_ms": {"type": "integer"},
+                            "text": {"type": "text"},
+                            "embedding": {
+                                "type": "knn_vector",
+                                "dimension": self._s.embedding_dims,
+                                "method": {
+                                    "name": "hnsw",
+                                    "engine": "lucene",
+                                    "space_type": "cosinesimil",
+                                },
+                            },
+                        }
+                    },
+                },
+            )
+        self._ensure_pipeline()
 
     def index_segments(
         self, segments: list[TranscriptSegment], vectors: list[list[float]]
@@ -95,16 +127,23 @@ class OpenSearchIndex:
         client = self._c()
         if not client.indices.exists(index=self._index):
             return []
-        should = [
-            {"match": {"text": query}},
-            {"knn": {"embedding": {"vector": vector, "k": limit}}},
-        ]
-        bool_query: dict[str, Any] = {"should": should, "minimum_should_match": 1}
+        self._ensure_pipeline()
+
+        term = {"term": {"care_recipient_id": care_recipient_id}}
+        # BM25 sub-query, recipient-scoped.
+        bm25: dict[str, Any] = {"match": {"text": query}}
         if care_recipient_id is not None:
-            bool_query["filter"] = [{"term": {"care_recipient_id": care_recipient_id}}]
+            bm25 = {"bool": {"must": [{"match": {"text": query}}], "filter": [term]}}
+        # k-NN sub-query with the recipient filter applied at candidate generation.
+        knn_body: dict[str, Any] = {"vector": vector, "k": limit}
+        if care_recipient_id is not None:
+            knn_body["filter"] = term
+        knn = {"knn": {"embedding": knn_body}}
 
         resp = client.search(
-            index=self._index, body={"size": limit, "query": {"bool": bool_query}}
+            index=self._index,
+            body={"size": limit, "query": {"hybrid": {"queries": [bm25, knn]}}},
+            params={"search_pipeline": PIPELINE_NAME},
         )
         hits: list[SearchHit] = []
         for h in resp["hits"]["hits"]:
