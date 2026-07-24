@@ -1,0 +1,11 @@
+# Staging = the production shape, EPHEMERAL (torn down after a rehearsal). It
+# inherits every production patch (HA Postgres, AUTH_MODE=jwt, LoadBalancer,
+# OpenSearch note, ...) and only overrides the issuer hostname + backup bucket.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - ../production
+
+patches:
+  - path: patches/staging-overrides.yaml

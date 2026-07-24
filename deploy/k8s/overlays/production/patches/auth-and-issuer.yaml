@@ -1,0 +1,26 @@
+# Point the app services at the production issuer (real HTTPS DuckDNS hostname) +
+# ENFORCE auth. Device (P3) and media (P4b) auth flip to jwt here (dev runs them
+# disabled). OIDC_AUDIENCE + the OpenFGA store/model ids are still injected at
+# deploy time (per-install values), exactly as dev-device-auth / dev-media-auth do.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: web-config
+data:
+  ZITADEL_BASE_URL: https://maagaparuga.duckdns.org
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: telemetry-config
+data:
+  AUTH_MODE: jwt
+  OIDC_ISSUER: https://maagaparuga.duckdns.org
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: media-config
+data:
+  AUTH_MODE: jwt
+  OIDC_ISSUER: https://maagaparuga.duckdns.org

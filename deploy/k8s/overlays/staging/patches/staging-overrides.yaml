@@ -1,0 +1,60 @@
+# Staging overrides on top of the production overlay: the real DuckDNS hostname
+# is staging-maagaparuga.duckdns.org (its own Let's Encrypt cert), and Postgres
+# backs up to a SEPARATE staging bucket so a rehearsal never touches production's
+# backup history. EXTERNALSECURE/port (443/true) are inherited from production.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: zitadel
+spec:
+  template:
+    spec:
+      containers:
+        - name: zitadel
+          env:
+            - name: ZITADEL_EXTERNALDOMAIN
+              value: staging-maagaparuga.duckdns.org
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: web-config
+data:
+  ZITADEL_BASE_URL: https://staging-maagaparuga.duckdns.org
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: telemetry-config
+data:
+  OIDC_ISSUER: https://staging-maagaparuga.duckdns.org
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: media-config
+data:
+  OIDC_ISSUER: https://staging-maagaparuga.duckdns.org
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: caddy-config
+data:
+  Caddyfile: |
+    {
+      # Uncomment for Let's Encrypt STAGING while testing (avoids rate limits):
+      # acme_ca https://acme-staging-v02.api.letsencrypt.org/directory
+    }
+    staging-maagaparuga.duckdns.org {
+      reverse_proxy apisix:9080
+    }
+---
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: maagaparuga-pg
+spec:
+  backup:
+    barmanObjectStore:
+      destinationPath: s3://bgg-iac-pg-backups-staging/
