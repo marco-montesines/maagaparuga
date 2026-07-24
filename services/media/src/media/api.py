@@ -42,6 +42,10 @@ async def _lifespan(_app: FastAPI) -> AsyncIterator[None]:
             "authenticated request is allowed for any care recipient",
             Settings().auth_mode,
         )
+    # Pre-build the singletons so concurrent cold-start requests can't each build
+    # (and leak) a second service/checker in the threadpool.
+    get_service()
+    get_checker()
     yield
 
 

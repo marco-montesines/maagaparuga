@@ -45,10 +45,13 @@ class FakeCatalog:
 
 
 class FakeQueue:
-    def __init__(self) -> None:
+    def __init__(self, fail: bool = False) -> None:
         self.published: list[ProcessingJob] = []
+        self._fail = fail
 
     async def publish(self, job: ProcessingJob) -> None:
+        if self._fail:
+            raise RuntimeError("nats unreachable")
         self.published.append(job)
 
 

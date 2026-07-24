@@ -65,14 +65,21 @@ class MediaService:
         await asyncio.to_thread(self._catalog.create, asset)
 
         if transcribe:
-            await self._queue.publish(
-                ProcessingJob(
-                    asset_id=asset_id,
-                    care_recipient_id=care_recipient_id,
-                    kind=kind,
-                    object_key=object_key,
+            try:
+                await self._queue.publish(
+                    ProcessingJob(
+                        asset_id=asset_id,
+                        care_recipient_id=care_recipient_id,
+                        kind=kind,
+                        object_key=object_key,
+                    )
                 )
-            )
+            except Exception:
+                # Binary + row are already persisted; if the job never made it to
+                # the queue the asset would sit UPLOADED forever. Mark it FAILED so
+                # the state is truthful (and a future sweeper could requeue it).
+                await asyncio.to_thread(self._catalog.set_status, asset_id, AssetStatus.FAILED)
+                raise
         return asset
 
     async def get(self, asset_id: str) -> MediaAsset | None:

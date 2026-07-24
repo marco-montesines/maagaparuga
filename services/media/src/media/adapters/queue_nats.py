@@ -7,6 +7,7 @@ worker (increment 2) consumes. nats-py is imported lazily.
 
 from __future__ import annotations
 
+import asyncio
 import json
 from typing import Any
 
@@ -47,20 +48,27 @@ class NatsJobQueue:
         self._url = (settings or Settings()).nats_url
         self._nc: Any | None = None
         self._js: Any | None = None
+        self._lock = asyncio.Lock()
 
     async def _ensure(self) -> Any:
-        if self._js is None:
-            import nats
+        # Fast path once connected; the lock serializes the first-use connect so
+        # two concurrent uploads don't each open (and leak) a NATS connection.
+        if self._js is not None:
+            return self._js
+        async with self._lock:
+            if self._js is None:
+                import nats
 
-            self._nc = await nats.connect(self._url)
-            self._js = self._nc.jetstream()
-            # Idempotent: every replica can create-or-update at startup.
-            await self._js.add_stream(
-                name=STREAM_NAME,
-                subjects=[SUBJECT_JOB, SUBJECT_DEAD],
-                retention="workqueue",
-                storage="file",
-            )
+                nc = await nats.connect(self._url)
+                js = nc.jetstream()
+                # Idempotent: every replica can create-or-update at startup.
+                await js.add_stream(
+                    name=STREAM_NAME,
+                    subjects=[SUBJECT_JOB, SUBJECT_DEAD],
+                    retention="workqueue",
+                    storage="file",
+                )
+                self._nc, self._js = nc, js
         return self._js
 
     async def publish(self, job: ProcessingJob) -> None:
