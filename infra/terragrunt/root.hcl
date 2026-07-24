@@ -24,7 +24,7 @@ remote_state {
     if_exists = "overwrite_terragrunt"
   }
   config = {
-    bucket = get_env("TG_STATE_BUCKET", "maagaparuga-tfstate")
+    bucket = get_env("TG_STATE_BUCKET", "bgg-iac-tfstate")
     key    = "${path_relative_to_include()}/terraform.tfstate"
     region = get_env("TG_STATE_REGION", "us-east-1")
     endpoints = {
@@ -62,6 +62,7 @@ terraform {
 }
 
 # Inputs shared by all environments (env-specific ones live in each child).
+# project stays bgg-iac until the public flip at P8 (then -> maagaparuga).
 inputs = {
-  project = "maagaparuga"
+  project = "bgg-iac"
 }

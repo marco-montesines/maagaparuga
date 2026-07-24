@@ -8,9 +8,9 @@ variable "hcloud_token" {
 }
 
 variable "project" {
-  description = "Project name, used in resource names + labels."
+  description = "Project identifier, used in Hetzner resource names + labels. Kept as bgg-iac until the public flip at P8 (then -> maagaparuga)."
   type        = string
-  default     = "maagaparuga"
+  default     = "bgg-iac"
 }
 
 variable "environment" {

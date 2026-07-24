@@ -13,7 +13,7 @@ modules/
   server/     N VMs (one per k3s node), private-network attached, cloud-init -> SSH 10022
   cluster/    composition: network + firewall + servers -> ansible_inventory output
 terragrunt/
-  terragrunt.hcl          root: S3-compatible remote state + generated hcloud provider
+  root.hcl                root: S3-compatible remote state + generated hcloud provider
   staging/                3-node, 10.10.x, ephemeral (destroy after a rehearsal)
   production/             3-node, 10.20.x, always-on
 ansible/                  common (hardening) + k3s + deploy roles          [next increment]
@@ -55,7 +55,7 @@ terragrunt output -raw ansible_inventory > ../../ansible/inventory.generated.yml
 ```
 
 For a quick local demo without a remote bucket, comment out the `remote_state`
-block in `terragrunt/terragrunt.hcl` (state stays local, gitignored).
+block in `terragrunt/root.hcl` (state stays local, gitignored).
 
 OpenSearch and ClickHouse node counts remain variables in the deploy overlays;
 the same manifests run single-node in dev and cluster-of-N here.

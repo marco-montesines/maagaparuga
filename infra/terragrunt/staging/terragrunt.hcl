@@ -7,7 +7,7 @@
 # secrets.auto.tfvars (gitignored) or environment variables.
 
 include "root" {
-  path = find_in_parent_folders("terragrunt.hcl")
+  path = find_in_parent_folders("root.hcl")
 }
 
 inputs = {
@@ -18,7 +18,7 @@ inputs = {
   ip_range     = "10.10.0.0/16"
   subnet_range = "10.10.1.0/24"
 
-  # No real DNS: a /etc/hosts hostname pointed at the server's public IP, served
-  # over a self-signed cert at APISIX (same pattern as dev's maagaparuga.test).
-  domain = "maagaparuga.staging"
+  # Real DNS via DuckDNS (A record -> a node public IP). Caddy terminates HTTPS
+  # with a real Let's Encrypt cert for this hostname.
+  domain = "staging-maagaparuga.duckdns.org"
 }
