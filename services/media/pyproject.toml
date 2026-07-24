@@ -1,0 +1,68 @@
+[project]
+name = "maagaparuga-media"
+version = "0.1.0"
+description = "Media pipeline: mock imaging/AV uploads -> object store (claim-check) -> JetStream job -> FFmpeg + faster-whisper transcript -> MiniLM embeddings -> OpenSearch hybrid search."
+requires-python = ">=3.12"
+# Runtime deps split by layer. The intake API (fastapi/boto3/psycopg/nats) is
+# light; the worker's ML stack (faster-whisper, sentence-transformers -> torch)
+# is heavy and imported LAZILY inside its adapters so importing the API surface
+# (and the fast test suite) never pulls torch. Versions are minimum-stable,
+# refreshed by the dependency-update automation (ADR 0013).
+dependencies = [
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.32",
+    "pydantic>=2.9",
+    "pydantic-settings>=2.6",
+    "python-multipart>=0.0.12",   # multipart upload parsing
+    "boto3>=1.35",                # S3 client -> SeaweedFS (claim-check store)
+    "psycopg[binary]>=3.2",       # media catalog (PostgreSQL)
+    "nats-py>=2.9",               # JetStream: publish jobs / consume in the worker
+    "opensearch-py>=2.7",         # knn_vector index + hybrid (BM25 + k-NN) search
+    "numpy>=2.1",
+    # --- worker-only ML stack (heavy; lazy-imported in adapters) ---
+    "faster-whisper>=1.0",        # CTranslate2 Whisper, int8 CPU
+    "sentence-transformers>=3.2", # all-MiniLM-L6-v2, 384-dim embeddings
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.3", "ruff>=0.7", "mypy>=1.13", "httpx>=0.27", "moto[s3]>=5.0"]
+
+[project.scripts]
+media = "media.__main__:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/media"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM", "RUF"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+mypy_path = "src"
+
+[[tool.mypy.overrides]]
+# Third-party libs without (complete) type stubs. The ML libs are lazy-imported
+# in adapters; typing them fully is out of scope for a research demo.
+module = [
+    "boto3",
+    "botocore.*",
+    "nats.*",
+    "opensearchpy.*",
+    "faster_whisper.*",
+    "sentence_transformers.*",
+    "psycopg.*",
+]
+ignore_missing_imports = true
