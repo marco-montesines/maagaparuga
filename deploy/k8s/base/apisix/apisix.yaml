@@ -144,6 +144,40 @@ data:
             "telemetry:9090": 1
           type: roundrobin
 
+      # Media over REST (P5): upload intake, catalogue lookup, and hybrid search
+      # for the mock imaging/AV pipeline — edge-authenticated exactly like the
+      # telemetry REST surface (require-bearer). The FastAPI service listens on
+      # plain HTTP; APISIX rewrites the versioned gateway paths to the service's
+      # own (/media, /search). The web app reaches media in-cluster directly
+      # (media:8000); this is the authenticated PUBLIC surface.
+      #
+      # /v1/media/search is declared with higher priority than /v1/media/* so an
+      # exact search hit is never mistaken for a GET of an asset id "search".
+      - uri: /v1/media/search
+        methods: [GET]
+        priority: 10
+        plugin_config_id: require-bearer
+        plugins:
+          proxy-rewrite:
+            uri: /search
+        upstream:
+          nodes:
+            "media:8000": 1
+          type: roundrobin
+      - uris:
+          - /v1/media
+          - /v1/media/*
+        methods: [GET, POST]
+        priority: 1
+        plugin_config_id: require-bearer
+        plugins:
+          proxy-rewrite:
+            regex_uri: ["^/v1/media(.*)", "/media$1"]
+        upstream:
+          nodes:
+            "media:8000": 1
+          type: roundrobin
+
       # ZITADEL is served under the SAME host as the app so the OIDC issuer is
       # one URL that resolves identically for the browser and for in-cluster
       # services (the standard single-domain IdP pattern; in production this

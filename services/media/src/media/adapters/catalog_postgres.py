@@ -56,7 +56,7 @@ class PgCatalog:
         if row is None:
             return None
         return MediaAsset(
-            id=row[0],
+            id=str(row[0]),   # psycopg returns the uuid column as a UUID object
             care_recipient_id=row[1],
             kind=MediaKind(row[2]),
             filename=row[3],
