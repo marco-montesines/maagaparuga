@@ -422,6 +422,8 @@ metadata:
   name: media
 spec:
   replicas: 1
+  strategy:
+    type: Recreate                    # single RWO model PVC — no two pods at once
   selector:
     matchLabels:
       app.kubernetes.io/name: media
@@ -431,6 +433,12 @@ spec:
         app.kubernetes.io/name: media
         app.kubernetes.io/part-of: maagaparuga
     spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        fsGroup: 10001                # write the MiniLM cache PVC
+        seccompProfile:
+          type: RuntimeDefault
       containers:
         - name: media
           image: ghcr.io/marco-montesines/maagaparuga-media:pinned
@@ -482,6 +490,17 @@ spec:
               memory: 512Mi
             limits:
               memory: 1536Mi          # loads MiniLM (torch) for query embedding
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: models
+              mountPath: /models       # MiniLM query-embedding cache persists restarts
+      volumes:
+        - name: models
+          persistentVolumeClaim:
+            claimName: media-models-api
 ---
 apiVersion: v1
 kind: Service
@@ -504,6 +523,16 @@ spec:
     requests:
       storage: 3Gi                    # whisper + MiniLM weights, downloaded once
 ---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: media-models-api             # the api's own RWO claim so its MiniLM cache
+spec:                                # persists independently of the worker (multi-node safe)
+  accessModes: ["ReadWriteOnce"]
+  resources:
+    requests:
+      storage: 1Gi
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -522,7 +551,11 @@ spec:
         app.kubernetes.io/part-of: maagaparuga
     spec:
       securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
         fsGroup: 10001                # app (uid 10001) can write the mounted PVC
+        seccompProfile:
+          type: RuntimeDefault
       containers:
         - name: media-worker
           image: ghcr.io/marco-montesines/maagaparuga-media:pinned
@@ -571,6 +604,10 @@ spec:
               memory: 768Mi
             limits:
               memory: 3Gi             # faster-whisper (base/int8) + MiniLM + audio
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
       volumes:
         - name: models
           persistentVolumeClaim:
