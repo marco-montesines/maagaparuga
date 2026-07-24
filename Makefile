@@ -12,6 +12,7 @@ DEV_OVERLAY     := deploy/k8s/overlays/dev
 COMPOSE_STORES  := deploy/compose/stores.compose.yml
 TELEMETRY_IMAGE := ghcr.io/marco-montesines/maagaparuga-telemetry:dev
 WEB_IMAGE       := ghcr.io/marco-montesines/maagaparuga-web:dev
+MEDIA_IMAGE     := ghcr.io/marco-montesines/maagaparuga-media:dev
 
 # CloudNativePG operator — pinned release manifest (ADR 0005, 0013).
 # HOLD at <=1.30.x: Postgres backups use the in-tree barmanObjectStore, which
@@ -230,6 +231,31 @@ web-rebuild: ## Rebuild the web app image from apps/web and roll the deployment 
 	eval $$(minikube docker-env) && docker build -t $(WEB_IMAGE) apps/web
 	kubectl -n $(NAMESPACE) rollout restart deployment/web
 	kubectl -n $(NAMESPACE) rollout status deployment/web --timeout=180s
+
+.PHONY: media-rebuild
+media-rebuild: ## Rebuild the media image (ffmpeg + faster-whisper + MiniLM) and roll api + worker
+	eval $$(minikube docker-env) && docker build -t $(MEDIA_IMAGE) services/media
+	kubectl -n $(NAMESPACE) rollout restart deployment/media deployment/media-worker
+	kubectl -n $(NAMESPACE) rollout status deployment/media --timeout=300s
+	kubectl -n $(NAMESPACE) rollout status deployment/media-worker --timeout=300s
+
+.PHONY: dev-media
+dev-media: ## Demo the media pipeline end-to-end: synthesize mock consultations, transcribe, index, hybrid-search (recipient 1)
+	@echo "Seeding synthetic media (espeak-ng TTS consultations + imaging placeholders)..."
+	@kubectl -n $(NAMESPACE) run media-sim-$$RANDOM --rm -i --restart=Never \
+		--image=$(MEDIA_IMAGE) --image-pull-policy=IfNotPresent \
+		-- simulate --recipient 1 --url http://media:8000
+	@echo "Waiting for the worker to transcribe + index (faster-whisper, CPU)..."
+	@for i in $$(seq 1 40); do \
+	  N=$$(kubectl -n $(NAMESPACE) exec maagaparuga-pg-1 -c postgres -- psql -U postgres -d app -tAc \
+	    "SELECT count(*) FROM media_assets WHERE care_recipient_id=1 AND status='indexed';" 2>/dev/null | tr -d ' '); \
+	  echo "  indexed consultations: $${N:-0}"; [ "$${N:-0}" -ge 1 ] && break; sleep 6; done
+	@echo "== media_assets (catalog) =="
+	@kubectl -n $(NAMESPACE) exec maagaparuga-pg-1 -c postgres -- psql -U postgres -d app -c \
+	  "SELECT kind, status, filename FROM media_assets WHERE care_recipient_id=1 ORDER BY created_at DESC LIMIT 10;"
+	@echo "== hybrid search: 'shortness of breath' =="
+	@kubectl -n $(NAMESPACE) exec deploy/web -- curl -s -m15 \
+	  "http://media:8000/search?q=shortness+of+breath&care_recipient_id=1&limit=3"; echo
 
 .PHONY: dev-dns
 dev-dns: ## Make the cluster resolve maagaparuga.test -> the APISIX gateway (single-host OIDC issuer)

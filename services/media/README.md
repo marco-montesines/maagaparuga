@@ -29,16 +29,20 @@ transcribed.
 - `api.py` — `POST /media` (upload), `GET /media/{id}`, `GET /search`, `/healthz`.
 - `service.py` — intake + search orchestration (blocking adapters run in a thread).
 - `adapters/` — `s3` (SeaweedFS), `catalog_postgres`, `queue_nats` (JetStream),
-  `opensearch_index` (knn + hybrid), `embeddings` (MiniLM). Heavy libraries import
-  lazily on first use.
-- `worker.py` / `pipeline.py` / `adapters/whisper.py` / `simulator.py` — the
-  transcription pipeline (increment 2).
+  `opensearch_index` (knn + hybrid), `embeddings` (MiniLM), `whisper`
+  (faster-whisper). Heavy libraries import lazily on first use.
+- `worker.py` / `pipeline.py` — the JetStream consumer + transcription pipeline
+  (fetch → FFmpeg normalize → faster-whisper → MiniLM → OpenSearch). The FFmpeg
+  step is an injected seam, so the pipeline is unit-tested with fakes.
+- `simulator.py` — synthesizes fictitious consultation speech (espeak-ng) +
+  imaging placeholders and uploads them to the intake API.
 
 ## Roles (one image, `media <cmd>`)
 
-- `media api` — intake + search (the `media` Deployment).
-- `media worker` — JetStream consumer (the `media-worker` Deployment; increment 2).
-- `media simulate` — seed synthetic mock media (increment 2).
+- `media api` — intake + search (the `media` Deployment, port 8000).
+- `media worker` — JetStream consumer (the `media-worker` Deployment; liveness on
+  `:9091`, model cache on a PVC at `/models`).
+- `media simulate` — seed synthetic mock media (`make dev-media`).
 
 ## Develop
 

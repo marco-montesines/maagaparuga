@@ -36,9 +36,17 @@ class Settings(BaseSettings):
     opensearch_index: str = "media_segments"
 
     # Worker ML models (CPU, int8).
-    whisper_model: str = "base"     # tiny|base|small (int8 CPU)
+    whisper_model: str = "base"           # tiny|base|small (int8 CPU)
+    whisper_compute_type: str = "int8"
+    whisper_cache_dir: str = "/models"    # PVC on-cluster; weights persist restarts
     embedding_model: str = "sentence-transformers/all-MiniLM-L6-v2"
     embedding_dims: int = 384
+
+    # Worker liveness endpoint (the Deployment is otherwise port-less).
+    health_addr: str = ":9091"
+
+    # Simulator: where the media intake API lives (for synthetic uploads).
+    media_api_url: str = "http://media:8000"
 
     # Upload guard: multipart size cap (bytes) before requiring a presigned PUT.
     max_upload_bytes: int = 50 * 1024 * 1024

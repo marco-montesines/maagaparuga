@@ -18,6 +18,7 @@ dependencies = [
     "psycopg[binary]>=3.2",       # media catalog (PostgreSQL)
     "nats-py>=2.9",               # JetStream: publish jobs / consume in the worker
     "opensearch-py>=2.7",         # knn_vector index + hybrid (BM25 + k-NN) search
+    "httpx>=0.27",                # simulator uploads to the intake API
     "numpy>=2.1",
     # --- worker-only ML stack (heavy; lazy-imported in adapters) ---
     "faster-whisper>=1.0",        # CTranslate2 Whisper, int8 CPU

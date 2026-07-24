@@ -38,6 +38,12 @@ secretGenerator:
   - name: redis-credentials
     literals:
       - password=dev-redis-pw
+  # Media service S3 identity — matches the `dev` identity in
+  # seaweedfs-s3-config.json. Dev-only well-known creds; P6 provisions real ones.
+  - name: media-s3
+    literals:
+      - S3_ACCESS_KEY=dev-maagaparuga
+      - S3_SECRET_KEY=dev-seaweedfs-secret
   - name: seaweedfs-s3-config
     files:
       - s3-config.json=seaweedfs-s3-config.json
@@ -151,13 +157,9 @@ patches:
       - op: add
         path: /spec/template/spec/containers/0/args/-
         value: -seed-mock-users
-  # App services scale to 0 until their images exist (web + web-queue,
-  # telemetry + telemetry-writer, and assessment are live; media +
-  # media-worker -> P4b).
-  - path: patches/apps-scale-zero.yaml
-    target:
-      kind: Deployment
-      name: ^(media|media-worker)$
+  # (All app services now have images and run at replicas 1: web + web-queue,
+  # telemetry + telemetry-writer, assessment, media + media-worker. The
+  # apps-scale-zero patch is retired — nothing left to hold at 0.)
   # Dev runs OpenSearch with the security plugin disabled (no TLS/auth noise
   # locally); cloud overlays enable security with real credentials (P6).
   - path: patches/opensearch-dev.yaml

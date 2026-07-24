@@ -71,6 +71,16 @@ class FakeIndex:
         return hits[:limit]
 
 
+class FakeTranscriber:
+    def __init__(self, spans: list[tuple[int, int, str]] | None = None) -> None:
+        self.spans = spans or []
+        self.calls: list[str] = []
+
+    def transcribe(self, audio_path: str) -> list[tuple[int, int, str]]:
+        self.calls.append(audio_path)
+        return self.spans
+
+
 class FakeEmbedder:
     def __init__(self, dims: int = 384) -> None:
         self._dims = dims
