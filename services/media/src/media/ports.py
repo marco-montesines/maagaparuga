@@ -82,3 +82,11 @@ class Embedder(Protocol):
 
     @property
     def dimensions(self) -> int: ...
+
+
+@runtime_checkable
+class AccessChecker(Protocol):
+    """Relationship-based access check (OpenFGA): may ``user`` act as ``relation``
+    on ``care_recipient:{recipient_id}``?"""
+
+    def allowed(self, user_sub: str, relation: str, recipient_id: int) -> bool: ...

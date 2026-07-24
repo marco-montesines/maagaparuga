@@ -257,6 +257,33 @@ dev-media: ## Demo the media pipeline end-to-end: synthesize mock consultations,
 	@kubectl -n $(NAMESPACE) exec deploy/web -- curl -s -m15 \
 	  "http://media:8000/search?q=shortness+of+breath&care_recipient_id=1&limit=3"; echo
 
+.PHONY: dev-media-auth
+dev-media-auth: ## Turn ON media authorization: service verifies caller JWT + per-recipient OpenFGA (grants a caller assigned_staff on 1-4, flips AUTH_MODE=jwt) — needs dev-bootstrap
+	@LOG="$$(kubectl -n $(NAMESPACE) logs job/zitadel-bootstrap 2>/dev/null)"; \
+	SUB=$$(printf '%s' "$$LOG" | sed -n 's/.*"telemetry_user_id": "\([^"]*\)".*/\1/p'); \
+	CID=$$(printf '%s' "$$LOG" | sed -n 's/.*"telemetry_client_id": "\([^"]*\)".*/\1/p'); \
+	SEC=$$(printf '%s' "$$LOG" | sed -n 's/.*"telemetry_client_secret": "\([^"]*\)".*/\1/p'); \
+	STORE=$$(kubectl -n $(NAMESPACE) exec deploy/web -- printenv OPENFGA_STORE_ID 2>/dev/null); \
+	MODEL=$$(kubectl -n $(NAMESPACE) exec deploy/web -- printenv OPENFGA_MODEL_ID 2>/dev/null); \
+	if [ -z "$$SUB" ] || [ -z "$$STORE" ]; then \
+		echo "missing bootstrap SA/store — run 'make dev-bootstrap' first"; exit 1; fi; \
+	echo "Granting the caller assigned_staff (=> viewer + editor) on recipients 1-4..."; \
+	kubectl -n $(NAMESPACE) exec deploy/web -- php artisan fga:grant $$SUB assigned_staff 1 2 3 4; \
+	echo "Flipping media to AUTH_MODE=jwt + injecting OpenFGA store/model..."; \
+	kubectl -n $(NAMESPACE) set env deployment/media \
+		AUTH_MODE=jwt OPENFGA_STORE_ID=$$STORE OPENFGA_MODEL_ID=$$MODEL >/dev/null; \
+	kubectl -n $(NAMESPACE) rollout status deployment/media --timeout=180s; \
+	TOKEN=$$(kubectl -n $(NAMESPACE) exec deploy/web -- curl -s -m10 -u "$$CID:$$SEC" \
+		-d grant_type=client_credentials --data-urlencode "scope=openid" \
+		"http://maagaparuga.test:9080/oauth/v2/token" | sed -n 's/.*"access_token":"\([^"]*\)".*/\1/p'); \
+	printf "authorized (recipient 1, granted)   -> HTTP "; \
+	kubectl -n $(NAMESPACE) exec deploy/web -- curl -s -o /dev/null -w '%{http_code}\n' -m12 \
+		-H "Authorization: Bearer $$TOKEN" "http://apisix:9080/v1/media/search?q=breath&care_recipient_id=1"; \
+	printf "denied     (recipient 5, no grant)  -> HTTP "; \
+	kubectl -n $(NAMESPACE) exec deploy/web -- curl -s -o /dev/null -w '%{http_code}\n' -m12 \
+		-H "Authorization: Bearer $$TOKEN" "http://apisix:9080/v1/media/search?q=breath&care_recipient_id=5"
+	@echo "Media authz ON. Revert: kubectl -n $(NAMESPACE) set env deployment/media AUTH_MODE=disabled"
+
 .PHONY: dev-dns
 dev-dns: ## Make the cluster resolve maagaparuga.test -> the APISIX gateway (single-host OIDC issuer)
 	@python3 -c "import json,subprocess as sp; \

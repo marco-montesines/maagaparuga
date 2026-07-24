@@ -71,6 +71,19 @@ class FakeIndex:
         return hits[:limit]
 
 
+class FakeChecker:
+    """AccessChecker fake: allow only the (user, relation, recipient) tuples given."""
+
+    def __init__(self, allowed: set[tuple[str, str, int]] | None = None, default: bool = False):
+        self._allowed = allowed or set()
+        self._default = default
+
+    def allowed(self, user_sub: str, relation: str, recipient_id: int) -> bool:
+        if (user_sub, relation, recipient_id) in self._allowed:
+            return True
+        return self._default
+
+
 class FakeTranscriber:
     def __init__(self, spans: list[tuple[int, int, str]] | None = None) -> None:
         self.spans = spans or []

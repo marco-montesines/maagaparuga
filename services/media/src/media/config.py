@@ -48,8 +48,24 @@ class Settings(BaseSettings):
     # Simulator: where the media intake API lives (for synthetic uploads).
     media_api_url: str = "http://media:8000"
 
+    # Authorization. "disabled" (dev default) skips JWT + OpenFGA and logs a loud
+    # warning every start; "jwt" verifies the caller's ZITADEL bearer against the
+    # JWKS and enforces per-recipient OpenFGA (reads -> viewer, writes -> editor),
+    # mirroring telemetry. Cloud overlays set "jwt"; `make dev-media-auth` flips it
+    # on in dev. Same opt-in pattern as telemetry's AUTH_MODE.
+    auth_mode: str = "disabled"
+    oidc_issuer: str = "http://maagaparuga.test:9080"
+    oidc_jwks_uri: str = ""            # default: {issuer}/oauth/v2/keys
+    oidc_audience: str = ""            # optional aud check (project id) when set
+    openfga_api_url: str = "http://openfga:8080"
+    openfga_store_id: str = ""
+    openfga_model_id: str = ""
+
     # Upload guard: multipart size cap (bytes) before requiring a presigned PUT.
     max_upload_bytes: int = 50 * 1024 * 1024
+
+    def jwks_uri(self) -> str:
+        return self.oidc_jwks_uri or f"{self.oidc_issuer}/oauth/v2/keys"
 
     def dsn(self) -> str:
         return (

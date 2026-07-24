@@ -409,6 +409,12 @@ data:
   EMBEDDING_DIMS: "384"
   HEALTH_ADDR: ":9091"
   MEDIA_API_URL: http://media:8000
+  # Authorization. Default off in dev (warns loudly every start); `make
+  # dev-media-auth` flips AUTH_MODE=jwt and injects the OpenFGA store/model ids.
+  # Cloud overlays set AUTH_MODE=jwt. Reads need OpenFGA `viewer`, writes `editor`.
+  AUTH_MODE: disabled
+  OIDC_ISSUER: http://maagaparuga.test:9080
+  OPENFGA_API_URL: http://openfga:8080
 ---
 apiVersion: apps/v1
 kind: Deployment
