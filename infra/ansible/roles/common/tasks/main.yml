@@ -1,0 +1,69 @@
+# Base hardening for every node. The PRIMARY controls are the Hetzner firewall
+# allow-list + key-only SSH on a non-default port; fail2ban is defence-in-depth.
+# No host ufw (house rule — the Hetzner Cloud Firewall is the single gate).
+---
+- name: Install base packages (fail2ban for SSH brute-force defence)
+  ansible.builtin.apt:
+    name:
+      - fail2ban
+      - curl
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Raise vm.max_map_count for OpenSearch (persisted)
+  ansible.posix.sysctl:
+    name: vm.max_map_count
+    value: "{{ opensearch_max_map_count }}"
+    sysctl_set: true
+    state: present
+    reload: true
+
+# --- SSH hardening -------------------------------------------------------
+# cloud-init already moved sshd to {{ ssh_port }} at first boot; this makes the
+# hardening declarative + adds key-only auth. Order matters: never narrow SSH in
+# a way that could lock us out before the firewall/port are already in place.
+- name: Harden sshd (non-default port, key-only, no root password)
+  ansible.builtin.copy:
+    dest: /etc/ssh/sshd_config.d/20-maagaparuga-hardening.conf
+    mode: "0644"
+    content: |
+      Port {{ ssh_port }}
+      PasswordAuthentication no
+      PubkeyAuthentication yes
+      PermitRootLogin prohibit-password
+      ChallengeResponseAuthentication no
+      X11Forwarding no
+  notify: Restart ssh
+
+- name: Ensure the ssh socket also listens on {{ ssh_port }} (Ubuntu 24.04 socket-activation)
+  ansible.builtin.copy:
+    dest: /etc/systemd/system/ssh.socket.d/override.conf
+    mode: "0644"
+    content: |
+      [Socket]
+      ListenStream=
+      ListenStream={{ ssh_port }}
+  notify: Restart ssh
+
+# --- fail2ban ------------------------------------------------------------
+- name: Configure fail2ban SSH jail on {{ ssh_port }}
+  ansible.builtin.copy:
+    dest: /etc/fail2ban/jail.local
+    mode: "0644"
+    content: |
+      [DEFAULT]
+      bantime  = 1h
+      findtime = 10m
+      maxretry = 5
+
+      [sshd]
+      enabled  = true
+      port     = {{ ssh_port }}
+      backend  = systemd
+  notify: Restart fail2ban
+
+- name: Enable + start fail2ban
+  ansible.builtin.service:
+    name: fail2ban
+    enabled: true
+    state: started

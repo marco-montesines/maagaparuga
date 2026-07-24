@@ -1,0 +1,23 @@
+#cloud-config
+# First-boot bootstrap: get SSH onto the non-default port BEFORE Ansible connects
+# (the firewall only opens ${ssh_port}, not 22 — if sshd stayed on 22 the box would
+# be unreachable). Ansible's `common` role does the rest of the hardening.
+package_update: true
+packages:
+  - python3   # Ansible needs a Python interpreter on the target
+
+write_files:
+  # Non-socket sshd: set the port via a drop-in.
+  - path: /etc/ssh/sshd_config.d/10-maagaparuga-port.conf
+    content: "Port ${ssh_port}\n"
+  # Ubuntu 24.04 ships ssh SOCKET-activated, which ignores sshd_config's Port —
+  # so also point the socket at ${ssh_port}.
+  - path: /etc/systemd/system/ssh.socket.d/override.conf
+    content: |
+      [Socket]
+      ListenStream=
+      ListenStream=${ssh_port}
+
+runcmd:
+  - systemctl daemon-reload
+  - systemctl restart ssh.socket || systemctl restart ssh

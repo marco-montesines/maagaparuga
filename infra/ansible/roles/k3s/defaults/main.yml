@@ -1,0 +1,6 @@
+---
+# APISIX is the gateway, so disable k3s's bundled traefik. Keep servicelb
+# (klipper) so the APISIX Service can bind host 80/443 on every node.
+# --secrets-encryption turns on at-rest encryption of Secrets in etcd.
+k3s_server_extra_args: "--disable traefik --write-kubeconfig-mode 0644 --secrets-encryption"
+k3s_agent_extra_args: ""

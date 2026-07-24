@@ -1,0 +1,26 @@
+# Example of the inventory Terragrunt emits — DO NOT edit by hand. Generate the
+# real one (gitignored) after `terragrunt apply`:
+#
+#   cd infra/terragrunt/<env>
+#   terragrunt output -raw ansible_inventory > ../../ansible/inventory.generated.yml
+#
+all:
+  vars:
+    ansible_user: root
+    ansible_port: 10022
+    ansible_ssh_common_args: "-o StrictHostKeyChecking=accept-new"
+    k3s_server_private_ip: 10.20.0.10
+  children:
+    k3s_server:
+      hosts:
+        maagaparuga-production-1:
+          ansible_host: 203.0.113.10   # public IPv4 (SSH only)
+          private_ip: 10.20.0.10
+    k3s_agents:
+      hosts:
+        maagaparuga-production-2:
+          ansible_host: 203.0.113.11
+          private_ip: 10.20.0.11
+        maagaparuga-production-3:
+          ansible_host: 203.0.113.12
+          private_ip: 10.20.0.12

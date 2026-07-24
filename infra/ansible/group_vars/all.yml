@@ -1,0 +1,12 @@
+# Shared Ansible variables. `env` is overridden on the command line
+# (-e env=production) and selects which deploy/k8s overlay is applied.
+---
+ssh_port: 10022
+env: production
+
+# k3s release channel (or pin an exact version in k3s_version below).
+k3s_channel: stable
+k3s_version: "" # empty -> use the channel; set e.g. "v1.31.5+k3s1" to pin
+
+# OpenSearch requires a high mmap count on every node it could schedule to.
+opensearch_max_map_count: 262144

@@ -1,0 +1,27 @@
+# Deploy the app: copy the kustomize tree to the control-plane node and apply the
+# environment overlay with the cluster's own kubectl. REAL secrets (Hetzner-free
+# things like the B2/DO backup keys, OpenSearch credentials, ZITADEL client) are
+# provisioned SEPARATELY — the overlay ships placeholders/SealedSecrets, not real
+# values (nothing sensitive is committed).
+---
+- name: Ensure the deploy directory exists on the server
+  ansible.builtin.file:
+    path: /opt/maagaparuga
+    state: directory
+    mode: "0750"
+
+- name: Copy the kustomize manifests to the server
+  ansible.builtin.copy:
+    src: "{{ playbook_dir }}/../../deploy/k8s/"
+    dest: /opt/maagaparuga/deploy/k8s/
+    mode: preserve
+
+- name: Apply the {{ env }} overlay
+  ansible.builtin.command:
+    cmd: k3s kubectl apply -k /opt/maagaparuga/deploy/k8s/overlays/{{ env }}
+  register: kubectl_apply
+  changed_when: "'created' in kubectl_apply.stdout or 'configured' in kubectl_apply.stdout"
+
+- name: Show what changed
+  ansible.builtin.debug:
+    var: kubectl_apply.stdout_lines

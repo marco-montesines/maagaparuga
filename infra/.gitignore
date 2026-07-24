@@ -1,0 +1,28 @@
+# NEVER commit secrets or state.
+# The Hetzner token, admin IP allow-lists, etc. live in *.tfvars (real values)
+# or environment variables — only the *.tfvars.example placeholders are tracked.
+*.tfvars
+!*.tfvars.example
+*.auto.tfvars
+!*.auto.tfvars.example
+
+# Terraform / OpenTofu working files + state (state can contain secrets).
+.terraform/
+.terraform.lock.hcl
+*.tfstate
+*.tfstate.*
+crash.log
+
+# Terragrunt cache + generated backend/provider blocks.
+.terragrunt-cache/
+backend.tf
+provider.tf
+
+# Sourced env files holding real tokens (the *.example templates stay tracked).
+env.sh
+*.env
+!*.env.example
+
+# Ansible retry files + any rendered inventory with real IPs.
+*.retry
+inventory.generated.yml
