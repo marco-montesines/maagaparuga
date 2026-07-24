@@ -1,5 +1,0 @@
-# Applied to every app Deployment matched in kustomization.yaml:
-# images for these services are built in P2-P4; until then nothing schedules.
-- op: replace
-  path: /spec/replicas
-  value: 0
