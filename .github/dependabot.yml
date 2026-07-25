@@ -1,0 +1,73 @@
+# Automated dependency + action-version updates across every ecosystem in the
+# monorepo. Weekly, grouped to keep PR noise low. GitHub Actions updates also
+# serve the hibp SHA-pinning convention — Dependabot pins/refreshes action refs.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      actions:
+        patterns: ["*"]
+
+  - package-ecosystem: composer
+    directory: /apps/web
+    schedule:
+      interval: weekly
+    groups:
+      php:
+        patterns: ["*"]
+
+  - package-ecosystem: npm
+    directory: /apps/web
+    schedule:
+      interval: weekly
+    groups:
+      js:
+        patterns: ["*"]
+
+  - package-ecosystem: gomod
+    directory: /services/telemetry
+    schedule:
+      interval: weekly
+    groups:
+      go:
+        patterns: ["*"]
+
+  - package-ecosystem: pip
+    directory: /services/assessment
+    schedule:
+      interval: weekly
+    groups:
+      python-assessment:
+        patterns: ["*"]
+
+  - package-ecosystem: pip
+    directory: /services/media
+    schedule:
+      interval: weekly
+    groups:
+      python-media:
+        patterns: ["*"]
+
+  - package-ecosystem: docker
+    directories:
+      - /apps/web
+      - /services/telemetry
+      - /services/assessment
+      - /services/media
+      - /tools/zitadel-bootstrap
+    schedule:
+      interval: weekly
+    groups:
+      base-images:
+        patterns: ["*"]
+
+  - package-ecosystem: terraform
+    directory: /infra
+    schedule:
+      interval: weekly
+    groups:
+      terraform:
+        patterns: ["*"]

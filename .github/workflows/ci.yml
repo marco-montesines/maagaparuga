@@ -1,0 +1,164 @@
+# CI quality gate. Per-language lint + type-check + test lanes, plus proto, IaC,
+# and secret-scan lanes. Runs on every PR and on push to master. Each lane is an
+# independent job so they run in parallel and a failure names the language.
+#
+# SAST / dependency-audit / image + IaC vuln scanning live in security.yml and
+# codeql.yml; the cost gate lives in the terraform plan workflow; deploy +
+# post-deploy smoke live in the deploy workflows. This file is the fast feedback.
+#
+# Action pinning: actions/* by major tag; third-party actions are on major tags
+# for now, kept current by Dependabot (see .github/dependabot.yml).
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches: [master]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  php:
+    name: php (web) — pint · larastan · pest
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.3"
+          tools: composer:v2
+          coverage: none
+      - name: Install dependencies
+        run: composer install --no-interaction --no-progress --prefer-dist
+      - name: App key (tests need it)
+        run: |
+          cp .env.example .env
+          php artisan key:generate
+      - name: Pint (format check)
+        run: ./vendor/bin/pint --test
+      - name: Larastan (phpstan level 6)
+        run: ./vendor/bin/phpstan analyse --no-progress
+      - name: Pest (sqlite :memory:, per phpunit.xml)
+        run: ./vendor/bin/pest --no-coverage
+
+  go:
+    name: go (telemetry) — golangci-lint · test · govulncheck
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: services/telemetry
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: services/telemetry/go.mod
+          cache-dependency-path: services/telemetry/go.sum
+      - name: golangci-lint (config v2)
+        uses: golangci/golangci-lint-action@v6
+        with:
+          version: latest # golangci-lint v2 (matches .golangci.yml `version: "2"`)
+          working-directory: services/telemetry
+      - name: Test (race + coverage)
+        run: go test -race -covermode=atomic ./...
+      - name: govulncheck
+        run: go run golang.org/x/vuln/cmd/govulncheck@latest ./...
+
+  python:
+    name: python — ruff · mypy · pytest
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        service: [assessment, media]
+    defaults:
+      run:
+        working-directory: services/${{ matrix.service }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      # media's worker-only ML stack (torch/faster-whisper/sentence-transformers)
+      # is a runtime dep but LAZY-imported, so tests don't need it loaded — install
+      # the CPU torch wheel first (mirrors the Dockerfile) so `pip install .` never
+      # pulls the multi-GB CUDA build.
+      - name: CPU torch (media only)
+        if: matrix.service == 'media'
+        run: pip install --no-cache-dir torch --index-url https://download.pytorch.org/whl/cpu
+      - name: Install (with dev extras)
+        run: pip install -e '.[dev]'
+      - name: Ruff (lint)
+        run: ruff check .
+      - name: Ruff (format check)
+        run: ruff format --check .
+      - name: Mypy
+        run: mypy
+      - name: Pytest
+        run: pytest -q
+
+  proto:
+    name: proto — buf lint + breaking
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # breaking check needs history to diff against master
+      - uses: bufbuild/buf-setup-action@v1
+        with:
+          github_token: ${{ github.token }}
+      - name: Lint (STANDARD)
+        run: buf lint
+        working-directory: proto
+      - name: Breaking-change check vs master
+        if: github.event_name == 'pull_request'
+        run: buf breaking --against "https://github.com/${{ github.repository }}.git#branch=master,subdir=proto"
+        working-directory: proto
+
+  iac:
+    name: iac — tofu fmt · validate · ansible-lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: opentofu/setup-opentofu@v1
+        with:
+          tofu_wrapper: false
+      - name: OpenTofu fmt check
+        run: tofu fmt -check -recursive infra
+      - name: OpenTofu validate (each module, no backend)
+        run: |
+          set -e
+          for m in infra/modules/*/; do
+            if ls "$m"*.tf >/dev/null 2>&1; then
+              echo "== validate $m =="
+              tofu -chdir="$m" init -backend=false -input=false >/dev/null
+              tofu -chdir="$m" validate
+            fi
+          done
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: ansible-lint
+        run: |
+          pip install ansible-lint
+          ansible-lint
+        working-directory: infra/ansible
+
+  secrets:
+    name: secrets — gitleaks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # scan full history, not just the tip
+      - uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
