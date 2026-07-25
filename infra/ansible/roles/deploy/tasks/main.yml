@@ -32,6 +32,37 @@
     cmd: k3s kubectl -n cnpg-system rollout status deployment/cnpg-controller-manager --timeout=180s
   changed_when: false
 
+# The app images are PRIVATE on GHCR (repo private until P8), so the pods need a
+# read:packages pull secret. Create it BEFORE the overlay so the first schedule
+# pulls cleanly (skipped if no token is supplied — e.g. once packages are public).
+# The overlay's default ServiceAccount references this secret by name (ghcr-pull).
+- name: Ensure the app namespace exists (for the pull secret)
+  ansible.builtin.command:
+    cmd: k3s kubectl create namespace maagaparuga --dry-run=client -o yaml
+  register: ns_manifest
+  changed_when: false
+  when: ghcr_pull_token | default('') | length > 0
+
+- name: Apply the app namespace
+  ansible.builtin.shell:
+    cmd: echo '{{ ns_manifest.stdout }}' | k3s kubectl apply -f -
+  changed_when: "'created' in ns_apply.stdout"
+  register: ns_apply
+  when: ghcr_pull_token | default('') | length > 0
+
+- name: Create/update the GHCR image-pull secret
+  ansible.builtin.shell:
+    cmd: >
+      k3s kubectl -n maagaparuga create secret docker-registry ghcr-pull
+      --docker-server=ghcr.io
+      --docker-username={{ ghcr_username }}
+      --docker-password='{{ ghcr_pull_token }}'
+      --dry-run=client -o yaml | k3s kubectl apply -f -
+  register: ghcr_secret
+  changed_when: "'created' in ghcr_secret.stdout or 'configured' in ghcr_secret.stdout"
+  no_log: true
+  when: ghcr_pull_token | default('') | length > 0
+
 - name: Apply the {{ env }} overlay
   ansible.builtin.command:
     cmd: k3s kubectl apply -k /opt/maagaparuga/deploy/k8s/overlays/{{ env }}
