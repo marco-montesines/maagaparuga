@@ -1,18 +1,18 @@
 {
   "currency": "EUR",
   "monthly_budget": {
-    "staging": 50.0,
-    "production": 55.0
+    "staging": 115.0,
+    "production": 120.0
   },
   "warn_at_percent": 80,
-  "allowed_server_types": ["cx22", "cx32", "cx42"],
+  "allowed_server_types": ["cpx22", "cpx32", "cpx42", "cx23", "cx33", "cx43", "cax21", "cax31"],
   "required_labels": ["environment", "project"],
   "notes": [
     "FinOps guardrail consumed by tools/cost-guard in CI.",
     "Budgets are gross EUR per month per environment.",
     "A plan whose projected monthly cost exceeds the budget FAILS the pipeline.",
     "allowed_server_types blocks accidental provisioning of large instances.",
-    "Both envs are 3-node clusters (default node_count=3, cx32 = 4 vCPU/8 GB): ~3x cx32 + primary IPs + volumes ~= EUR 42/mo; budgets leave headroom.",
+    "Both envs are 3-node clusters (node_count=3). INTERIM: cpx32 (4 vCPU/8 GB x86) at EUR 35.49/mo/node -> ~3x = EUR 106 + IPs/volumes ~= EUR 111/mo; budgets 115/120 fit that. The cheaper cax21 (Arm, EUR 10.49 -> ~EUR 35/mo total) was OUT OF STOCK in every datacenter (checked hcloud datacenter available list). When Arm restocks, switch server_type to cax21 and drop budgets back to ~40/45. Node count is the other cost lever.",
     "Staging is ephemeral (terragrunt destroy after verification) - real spend is a fraction of a full month, but the guardrail prices the provisioned (full-month) cost."
   ]
 }

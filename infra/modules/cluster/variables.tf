@@ -25,9 +25,9 @@ variable "node_count" {
 }
 
 variable "server_type" {
-  description = "Hetzner server type per node (cx32 = 4 vCPU / 8 GB)."
+  description = "Hetzner server type per node. cpx32 = 4 vCPU / 8 GB x86, EUR 35.49/mo (nbg1). The cheaper cax21 Arm (EUR 10.49) is preferable but was OUT OF STOCK in every datacenter — check LIVE availability with `hcloud datacenter describe <dc>` (the server_types.available list), NOT just the catalog/price. Switch to cax21 when it restocks (arm64 matches Apple-Silicon builds)."
   type        = string
-  default     = "cx32"
+  default     = "cpx32"
 }
 
 variable "image" {
@@ -69,8 +69,8 @@ variable "k8s_api_allowed_ips" {
   default     = []
 }
 
-variable "ssh_public_keys" {
-  description = "Admin SSH public keys."
+variable "ssh_key_names" {
+  description = "Names of SSH keys already in the Hetzner project (hcloud ssh-key list). Referenced, not created."
   type        = list(string)
 }
 

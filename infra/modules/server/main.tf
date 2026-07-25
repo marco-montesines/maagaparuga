@@ -3,14 +3,6 @@
 # node attaches to the private network with a stable IP; the public interface
 # exists only for APISIX (80/443) and admin SSH (the firewall enforces that).
 
-# Upload the admin public key(s) to the project so servers accept them.
-resource "hcloud_ssh_key" "admin" {
-  count      = length(var.ssh_public_keys)
-  name       = "${var.name_prefix}-admin-${count.index}"
-  public_key = var.ssh_public_keys[count.index]
-  labels     = var.labels
-}
-
 resource "hcloud_server" "node" {
   count = var.node_count
   # The name becomes the OS hostname + k8s node name (RFC 1123). The project is
@@ -19,7 +11,7 @@ resource "hcloud_server" "node" {
   image       = var.image
   server_type = var.server_type
   location    = var.location
-  ssh_keys    = hcloud_ssh_key.admin[*].id
+  ssh_keys    = var.ssh_key_names # existing keys in the project, by name
 
   labels = merge(var.labels, {
     # First node runs the control plane; the rest join as agents.

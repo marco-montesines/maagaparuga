@@ -1,11 +1,82 @@
 # Staging = the production shape, EPHEMERAL (torn down after a rehearsal). It
-# inherits every production patch (HA Postgres, AUTH_MODE=jwt, LoadBalancer,
-# OpenSearch note, ...) and only overrides the issuer hostname + backup bucket.
+# inherits every production patch (HA Postgres, AUTH_MODE=jwt, Caddy TLS, ...) and
+# overrides the issuer hostname + backup target.
+#
+# UNLIKE production, staging DOES ship secrets — well-known throwaway values —
+# because it holds only synthetic mock data and is destroyed after each rehearsal.
+# They just satisfy each component's need for *a* credential so it boots. Real
+# secrets are NEVER committed; production provisions them out-of-band.
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
+
+namespace: maagaparuga # so the generated Secrets land in the app namespace too
 
 resources:
   - ../production
 
 patches:
   - path: patches/staging-overrides.yaml
+
+# Throwaway staging credentials (synthetic-only, ephemeral). CNPG generates the
+# main app DB secret (maagaparuga-pg-app) itself; these are the rest.
+secretGenerator:
+  - name: pg-zitadel-credentials
+    type: kubernetes.io/basic-auth
+    literals:
+      - username=zitadel
+      - password=staging-zitadel-pw
+  - name: pg-openfga-credentials
+    type: kubernetes.io/basic-auth
+    literals:
+      - username=openfga
+      - password=staging-openfga-pw
+  - name: openfga-datastore
+    literals:
+      - uri=postgres://openfga:staging-openfga-pw@maagaparuga-pg-rw:5432/openfga?sslmode=disable
+  - name: clickhouse-credentials
+    literals:
+      - username=maagaparuga
+      - password=staging-clickhouse-pw
+  - name: opensearch-credentials
+    literals:
+      - admin-password=Staging-Opensearch-Pw1!
+  - name: redis-credentials
+    literals:
+      - password=staging-redis-pw
+  - name: seaweedfs-s3-config
+    files:
+      - s3-config.json=seaweedfs-s3-config.json
+  - name: media-s3
+    literals:
+      - S3_ACCESS_KEY=staging-maagaparuga
+      - S3_SECRET_KEY=staging-seaweedfs-secret
+  # Postgres backup target = the in-cluster SeaweedFS (see staging-overrides) —
+  # same identity as seaweedfs-s3-config, so no external B2 creds needed here.
+  - name: pg-backup-s3
+    literals:
+      - ACCESS_KEY_ID=staging-maagaparuga
+      - ACCESS_SECRET_KEY=staging-seaweedfs-secret
+  - name: zitadel-masterkey
+    literals:
+      # ZITADEL requires exactly 32 bytes.
+      - masterkey=StagingMasterkeyStagingMasterkey
+  - name: web-secrets
+    literals:
+      - APP_KEY=base64:c3RhZ2luZy1rZXktc3RhZ2luZy1rZXktc3RnLWsxPQ==
+      # Filled at runtime by the bootstrap (empty = authz/login fail closed).
+      - OPENFGA_STORE_ID=
+      - OPENFGA_MODEL_ID=
+      - ZITADEL_CLIENT_ID=
+      - ZITADEL_CLIENT_SECRET=
+      - ZITADEL_REDIRECT_URI=https://staging-maagaparuga.duckdns.org/auth/callback
+  - name: telemetry-secrets
+    literals:
+      - DEVICE_CLIENT_ID=
+      - DEVICE_CLIENT_SECRET=
+  - name: grafana-admin
+    literals:
+      - username=admin
+      - password=staging-grafana-admin
+
+generatorOptions:
+  disableNameSuffixHash: true # stable names so the base manifests can reference them

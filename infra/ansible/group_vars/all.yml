@@ -10,3 +10,7 @@ k3s_version: "" # empty -> use the channel; set e.g. "v1.31.5+k3s1" to pin
 
 # OpenSearch requires a high mmap count on every node it could schedule to.
 opensearch_max_map_count: 262144
+
+# CloudNativePG operator (Postgres CRDs). HOLD at <=1.30.x — 1.31 removes the
+# in-tree barmanObjectStore the cluster.yaml uses (matches the Makefile pin).
+cnpg_version: "1.30.0"

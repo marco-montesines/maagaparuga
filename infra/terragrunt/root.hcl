@@ -30,7 +30,11 @@ remote_state {
     endpoints = {
       s3 = get_env("TG_STATE_ENDPOINT", "https://s3.us-west-004.backblazeb2.com")
     }
-    use_lockfile = true # S3-native state locking
+    # NOTE: no state locking. Terraform's S3-native lockfile needs a conditional
+    # PutObject (If-None-Match) that Backblaze B2 does NOT implement (it returns
+    # 501 NotImplemented), and B2 has no DynamoDB equivalent. Fine for a solo
+    # operator; enable B2 bucket VERSIONING so a bad apply can be rolled back.
+    # (If you switch state to DigitalOcean Spaces later, test use_lockfile there.)
 
     # Non-AWS S3 (B2 / DO Spaces) needs these skips + no checksum trailers.
     skip_credentials_validation = true

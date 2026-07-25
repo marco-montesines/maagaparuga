@@ -1,0 +1,14 @@
+{
+  "identities": [
+    {
+      "name": "staging",
+      "credentials": [
+        {
+          "accessKey": "staging-maagaparuga",
+          "secretKey": "staging-seaweedfs-secret"
+        }
+      ],
+      "actions": ["Admin", "Read", "Write", "List", "Tagging"]
+    }
+  ]
+}

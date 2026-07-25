@@ -1,5 +1,7 @@
 ---
 - name: Restart ssh
+  # daemon_reload re-runs the generator so ssh.socket picks up the new sshd_config
+  # Port; restarting the socket rebinds it.
   ansible.builtin.systemd:
     name: ssh.socket
     state: restarted

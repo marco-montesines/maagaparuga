@@ -27,13 +27,13 @@ variable "location" {
   type        = string
 }
 
-variable "ssh_public_keys" {
-  description = "Public SSH keys allowed to log in as the admin user."
+variable "ssh_key_names" {
+  description = "Names of SSH keys ALREADY in the Hetzner project (see `hcloud ssh-key list`). Referenced, not created — Hetzner rejects duplicate keys by fingerprint, and referencing keeps re-applies idempotent. Upload one first if needed: `hcloud ssh-key create --name <n> --public-key-from-file ~/.ssh/id_ed25519.pub`."
   type        = list(string)
 
   validation {
-    condition     = length(var.ssh_public_keys) > 0
-    error_message = "Provide at least one SSH public key or you cannot reach the servers."
+    condition     = length(var.ssh_key_names) > 0
+    error_message = "Provide at least one existing SSH key name or you cannot reach the servers."
   }
 }
 

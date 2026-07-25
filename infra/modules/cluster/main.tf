@@ -33,7 +33,7 @@ module "servers" {
   server_type     = var.server_type
   image           = var.image
   location        = var.location
-  ssh_public_keys = var.ssh_public_keys
+  ssh_key_names   = var.ssh_key_names
   network_id      = module.network.network_id
   subnet_ip_range = module.network.subnet_ip_range
   ssh_port        = var.ssh_port

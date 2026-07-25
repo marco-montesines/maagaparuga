@@ -3,7 +3,7 @@
 # (10.10.x) and, ideally, its own Hetzner project/token so it can never touch
 # production.
 #
-# Secrets (hcloud_token, admin_allowed_ips, ssh_public_keys) come from
+# Secrets (hcloud_token, admin_allowed_ips, ssh_key_names) come from
 # secrets.auto.tfvars (gitignored) or environment variables.
 
 include "root" {
@@ -13,7 +13,7 @@ include "root" {
 inputs = {
   environment  = "staging"
   node_count   = 3
-  server_type  = "cx32" # 4 vCPU / 8 GB per node
+  server_type  = "cpx32" # 4 vCPU / 8 GB x86, EUR 35.49/mo (cax21 Arm is cheaper but was out of stock everywhere)
   location     = "nbg1"
   ip_range     = "10.10.0.0/16"
   subnet_range = "10.10.1.0/24"

@@ -35,15 +35,9 @@
       X11Forwarding no
   notify: Restart ssh
 
-- name: Ensure the ssh socket also listens on {{ ssh_port }} (Ubuntu 24.04 socket-activation)
-  ansible.builtin.copy:
-    dest: /etc/systemd/system/ssh.socket.d/override.conf
-    mode: "0644"
-    content: |
-      [Socket]
-      ListenStream=
-      ListenStream={{ ssh_port }}
-  notify: Restart ssh
+# The sshd_config Port above (10022 only, dropping the bootstrap 22) drives the
+# ssh.socket ListenStream via the systemd generator. Keep socket-activation; the
+# handler daemon-reloads (regenerates the socket addresses) + restarts ssh.socket.
 
 # --- fail2ban ------------------------------------------------------------
 - name: Configure fail2ban SSH jail on {{ ssh_port }}

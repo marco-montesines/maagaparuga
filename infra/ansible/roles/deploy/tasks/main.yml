@@ -16,6 +16,22 @@
     dest: /opt/maagaparuga/deploy/k8s/
     mode: preserve
 
+# The overlay's Postgres Cluster/Database/ScheduledBackup need the CloudNativePG
+# CRDs, so install the operator FIRST (pinned <=1.30.x — the in-tree
+# barmanObjectStore we use is removed in 1.31; see the Makefile note).
+- name: Install the CloudNativePG operator (provides the Postgres CRDs)
+  ansible.builtin.command:
+    cmd: >
+      k3s kubectl apply --server-side -f
+      https://github.com/cloudnative-pg/cloudnative-pg/releases/download/v{{ cnpg_version }}/cnpg-{{ cnpg_version }}.yaml
+  register: cnpg_apply
+  changed_when: "'created' in cnpg_apply.stdout or 'configured' in cnpg_apply.stdout"
+
+- name: Wait for the CNPG operator to be ready
+  ansible.builtin.command:
+    cmd: k3s kubectl -n cnpg-system rollout status deployment/cnpg-controller-manager --timeout=180s
+  changed_when: false
+
 - name: Apply the {{ env }} overlay
   ansible.builtin.command:
     cmd: k3s kubectl apply -k /opt/maagaparuga/deploy/k8s/overlays/{{ env }}

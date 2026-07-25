@@ -55,6 +55,9 @@ kind: Cluster
 metadata:
   name: maagaparuga-pg
 spec:
+  # Staging backs up to the IN-CLUSTER SeaweedFS (like dev), not B2 — self-
+  # contained + no real offsite creds needed for a throwaway rehearsal.
   backup:
     barmanObjectStore:
-      destinationPath: s3://bgg-iac-pg-backups-staging/
+      destinationPath: s3://pg-backups/
+      endpointURL: http://seaweedfs:8333
