@@ -15,9 +15,9 @@ opensearch_max_map_count: 262144
 # in-tree barmanObjectStore the cluster.yaml uses (matches the Makefile pin).
 cnpg_version: "1.30.0"
 
-# GHCR image-pull secret (private app images, repo private until P8). Leave
+# GHCR image-pull secret (needed while the app-image packages are private). Leave
 # ghcr_pull_token EMPTY here — pass the real read:packages token out of band
 # (`-e ghcr_pull_token=...` or a vault). Empty => the pull-secret step is skipped
-# (e.g. after P8 when the packages are public).
+# (e.g. if the packages are made public).
 ghcr_username: marco-montesines
 ghcr_pull_token: ""

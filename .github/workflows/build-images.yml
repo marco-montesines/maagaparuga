@@ -1,4 +1,4 @@
-# P7 — build + push the application container images to GHCR.
+# Build + push the application container images to GHCR.
 #
 # The cloud overlays (staging/production) pull five images that are built FROM
 # THIS REPO. In dev they're built straight into minikube's Docker daemon
@@ -10,10 +10,10 @@
 # target arm64 nodes (e.g. cax*) later, add `linux/arm64` to `platforms` and a
 # `docker/setup-qemu-action` step (roughly doubles build time).
 #
-# Visibility: the repo is PRIVATE until the P8 audit, so the published packages
-# are private too and k3s needs a read:packages pull secret (`ghcr-pull`,
-# provisioned out of band — see deploy/k8s/overlays/production/README.md). After
-# P8 the packages can be flipped public and the pull secret dropped.
+# Visibility: while the repository is private the published packages are private
+# too, so k3s needs a read:packages pull secret (`ghcr-pull`, provisioned out of
+# band — see deploy/k8s/overlays/production/README.md). If the packages are made
+# public the pull secret can be dropped.
 name: build-images
 
 on:

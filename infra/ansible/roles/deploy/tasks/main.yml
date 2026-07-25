@@ -32,9 +32,9 @@
     cmd: k3s kubectl -n cnpg-system rollout status deployment/cnpg-controller-manager --timeout=180s
   changed_when: false
 
-# The app images are PRIVATE on GHCR (repo private until P8), so the pods need a
-# read:packages pull secret. Create it BEFORE the overlay so the first schedule
-# pulls cleanly (skipped if no token is supplied — e.g. once packages are public).
+# While the app images are PRIVATE on GHCR the pods need a read:packages pull
+# secret. Create it BEFORE the overlay so the first schedule pulls cleanly
+# (skipped if no token is supplied — e.g. if the packages are made public).
 # The overlay's default ServiceAccount references this secret by name (ghcr-pull).
 - name: Ensure the app namespace exists (for the pull secret)
   ansible.builtin.command:

@@ -36,7 +36,7 @@ Create these before/right after `apply` — from a gitignored `secrets/*.env`, a
 | `media-s3` | `S3_ACCESS_KEY`, `S3_SECRET_KEY` | media object store |
 | `grafana-admin` | user/pass | |
 | **`pg-backup-s3`** | `ACCESS_KEY_ID`, `ACCESS_SECRET_KEY` | **Backblaze B2 app key** (offsite WORM backups → `s3://bgg-iac-pg-backups/`) |
-| **`ghcr-pull`** | docker-registry | **GHCR read:packages** pull secret for the private app images (repo private until P8). The Ansible deploy role creates it from `ghcr_pull_token`; or by hand: `kubectl -n maagaparuga create secret docker-registry ghcr-pull --docker-server=ghcr.io --docker-username=marco-montesines --docker-password=<PAT>`. The `default` ServiceAccount references it, so every app pod inherits it. Drop it once the packages go public post-P8. |
+| **`ghcr-pull`** | docker-registry | **GHCR read:packages** pull secret for the private app images (needed while the packages are private). The Ansible deploy role creates it from `ghcr_pull_token`; or by hand: `kubectl -n maagaparuga create secret docker-registry ghcr-pull --docker-server=ghcr.io --docker-username=marco-montesines --docker-password=<PAT>`. The `default` ServiceAccount references it, so every app pod inherits it. Drop it if the packages are made public. |
 
 Then run the bootstrap (`make dev-bootstrap` equivalent against this cluster:
 ZITADEL project/clients + `fga:bootstrap` + inject store/model), device-auth, and

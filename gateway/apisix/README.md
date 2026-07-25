@@ -17,4 +17,4 @@ so the service re-checks. Web app + ZITADEL login stay open (browser sessions, n
 bearer tokens). Native gRPC *streaming* edge-auth is a known limitation (openid-connect
 doesn't reject it) — gated at the telemetry service instead. **Still to do:** TLS
 (per-env cert), rate limiting, security headers, the `/graphql` route. See the
-platform README for the overview and the build plan for the full P5 scope.
+platform README for the overview of the full gateway scope.

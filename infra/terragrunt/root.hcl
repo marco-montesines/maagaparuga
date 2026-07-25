@@ -66,7 +66,6 @@ terraform {
 }
 
 # Inputs shared by all environments (env-specific ones live in each child).
-# project stays bgg-iac until the public flip at P8 (then -> maagaparuga).
 inputs = {
   project = "bgg-iac"
 }

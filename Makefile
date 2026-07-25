@@ -17,7 +17,7 @@ MEDIA_IMAGE     := ghcr.io/marco-montesines/maagaparuga-media:dev
 # CloudNativePG operator — pinned release manifest (ADR 0005, 0013).
 # HOLD at <=1.30.x: Postgres backups use the in-tree barmanObjectStore, which
 # CNPG removes in 1.31.0. Bumping past 1.30 needs migrating cluster.yaml to the
-# Barman Cloud Plugin first (see the backup note in build-plan). Do not let the
+# Barman Cloud Plugin first (see the backup notes in the deploy docs). Do not let the
 # auto-version-bump cross 1.31 until that migration lands.
 CNPG_VERSION  ?= 1.30.0
 CNPG_MANIFEST := https://github.com/cloudnative-pg/cloudnative-pg/releases/download/v$(CNPG_VERSION)/cnpg-$(CNPG_VERSION).yaml
