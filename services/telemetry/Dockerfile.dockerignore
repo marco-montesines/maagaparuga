@@ -1,0 +1,22 @@
+# NOTE: telemetry's Dockerfile uses repo-root-relative COPY paths
+# (COPY services/telemetry/...), so its build context is the REPO ROOT — a plain
+# services/telemetry/.dockerignore would NOT be honored. BuildKit reads this
+# per-Dockerfile ignore file (<dockerfile-name>.dockerignore, next to the
+# Dockerfile) instead, whatever the context.
+#
+# Only services/telemetry/ is COPYed, but exclude secret-shaped + VCS + heavy
+# paths across the whole context as defense-in-depth (blacklist form avoids the
+# .dockerignore parent-exclusion gotcha). On CI the context is only tracked files
+# anyway (gitignored .claude/, env.sh, *.tfvars are never checked out).
+.git
+**/.env
+**/.env.*
+**/*.pem
+**/*.key
+**/*.tfvars
+**/*.tfstate
+**/*.tfstate.*
+**/node_modules
+**/vendor
+**/__pycache__
+.claude
