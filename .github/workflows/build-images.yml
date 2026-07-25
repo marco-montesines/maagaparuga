@@ -49,21 +49,30 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
+        # Each Dockerfile's COPY paths define its expected build context: the four
+        # own-dir builds COPY relative to their own folder; telemetry's Dockerfile
+        # uses repo-root-relative paths (COPY services/telemetry/...), so it builds
+        # from the repo root. `file` is set explicitly to keep that unambiguous.
         include:
           - name: web
             context: apps/web
+            file: apps/web/Dockerfile
             image: ghcr.io/marco-montesines/maagaparuga-web
           - name: telemetry
-            context: services/telemetry
+            context: .
+            file: services/telemetry/Dockerfile
             image: ghcr.io/marco-montesines/maagaparuga-telemetry
           - name: assessment
             context: services/assessment
+            file: services/assessment/Dockerfile
             image: ghcr.io/marco-montesines/maagaparuga-assessment
           - name: media
             context: services/media
+            file: services/media/Dockerfile
             image: ghcr.io/marco-montesines/maagaparuga-media
           - name: zitadel-bootstrap
             context: tools/zitadel-bootstrap
+            file: tools/zitadel-bootstrap/Dockerfile
             image: ghcr.io/marco-montesines/maagaparuga-zitadel-bootstrap
     steps:
       - name: Checkout
@@ -98,6 +107,7 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           context: ${{ matrix.context }}
+          file: ${{ matrix.file }}
           platforms: linux/amd64
           push: true
           tags: ${{ steps.meta.outputs.tags }}
