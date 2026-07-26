@@ -36,11 +36,13 @@ class User extends Authenticatable
         ];
     }
 
+    /** @return HasOne<CareRecipient, $this> */
     public function careRecipientProfile(): HasOne
     {
         return $this->hasOne(CareRecipient::class);
     }
 
+    /** @return HasMany<CareTeamAssignment, $this> */
     public function assignments(): HasMany
     {
         return $this->hasMany(CareTeamAssignment::class);

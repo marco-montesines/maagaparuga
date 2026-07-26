@@ -2,12 +2,14 @@
 
 namespace App\Models;
 
+use Database\Factories\GeneralMedicalInfoFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class GeneralMedicalInfo extends Model
 {
+    /** @use HasFactory<GeneralMedicalInfoFactory> */
     use HasFactory;
 
     protected $fillable = [
@@ -26,6 +28,7 @@ class GeneralMedicalInfo extends Model
         ];
     }
 
+    /** @return BelongsTo<CareRecipient, $this> */
     public function careRecipient(): BelongsTo
     {
         return $this->belongsTo(CareRecipient::class);

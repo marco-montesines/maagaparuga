@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Enums\AttachmentKind;
+use Database\Factories\ConsultationAttachmentFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -14,6 +15,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  */
 class ConsultationAttachment extends Model
 {
+    /** @use HasFactory<ConsultationAttachmentFactory> */
     use HasFactory;
 
     protected $fillable = ['consultation_id', 'kind', 'object_key', 'media_id', 'caption'];
@@ -23,6 +25,7 @@ class ConsultationAttachment extends Model
         return ['kind' => AttachmentKind::class];
     }
 
+    /** @return BelongsTo<Consultation, $this> */
     public function consultation(): BelongsTo
     {
         return $this->belongsTo(Consultation::class);

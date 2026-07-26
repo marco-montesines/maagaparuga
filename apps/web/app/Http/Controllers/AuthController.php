@@ -18,7 +18,7 @@ class AuthController extends Controller
 {
     private const ROLES_CLAIM = 'urn:zitadel:iam:org:project:roles';
 
-    public function redirect(): RedirectResponse
+    public function redirect(): \Symfony\Component\HttpFoundation\RedirectResponse
     {
         return Socialite::driver('zitadel')->redirect();
     }

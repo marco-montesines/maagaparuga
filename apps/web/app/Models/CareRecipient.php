@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Enums\CareContext;
+use Database\Factories\CareRecipientFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -11,6 +12,7 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class CareRecipient extends Model
 {
+    /** @use HasFactory<CareRecipientFactory> */
     use HasFactory;
 
     protected $fillable = [
@@ -27,36 +29,43 @@ class CareRecipient extends Model
         ];
     }
 
+    /** @return BelongsTo<User, $this> */
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
     }
 
+    /** @return HasMany<CareTeamAssignment, $this> */
     public function assignments(): HasMany
     {
         return $this->hasMany(CareTeamAssignment::class);
     }
 
+    /** @return HasOne<GeneralMedicalInfo, $this> */
     public function medicalInfo(): HasOne
     {
         return $this->hasOne(GeneralMedicalInfo::class);
     }
 
+    /** @return HasMany<Consultation, $this> */
     public function consultations(): HasMany
     {
         return $this->hasMany(Consultation::class)->orderByDesc('consulted_at');
     }
 
+    /** @return HasMany<QuestionnaireResponse, $this> */
     public function questionnaireResponses(): HasMany
     {
         return $this->hasMany(QuestionnaireResponse::class);
     }
 
+    /** @return HasMany<AssessmentResult, $this> */
     public function assessmentResults(): HasMany
     {
         return $this->hasMany(AssessmentResult::class)->orderByDesc('computed_at');
     }
 
+    /** @return HasMany<Alert, $this> */
     public function alerts(): HasMany
     {
         return $this->hasMany(Alert::class)->orderByDesc('created_at');

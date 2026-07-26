@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Enums\RiskLevel;
+use Database\Factories\AssessmentResultFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -10,6 +11,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 /** Written by the assessment service (NEWS2, DASS21 subscales, fuzzy risk). */
 class AssessmentResult extends Model
 {
+    /** @use HasFactory<AssessmentResultFactory> */
     use HasFactory;
 
     protected $fillable = [
@@ -25,6 +27,7 @@ class AssessmentResult extends Model
         ];
     }
 
+    /** @return BelongsTo<CareRecipient, $this> */
     public function careRecipient(): BelongsTo
     {
         return $this->belongsTo(CareRecipient::class);

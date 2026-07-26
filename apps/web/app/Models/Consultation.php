@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use Database\Factories\ConsultationFactory;
 use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -10,6 +11,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Consultation extends Model
 {
+    /** @use HasFactory<ConsultationFactory> */
     use HasFactory;
 
     protected $fillable = [
@@ -26,27 +28,35 @@ class Consultation extends Model
         ];
     }
 
+    /** @return BelongsTo<CareRecipient, $this> */
     public function careRecipient(): BelongsTo
     {
         return $this->belongsTo(CareRecipient::class);
     }
 
+    /** @return BelongsTo<User, $this> */
     public function staff(): BelongsTo
     {
         return $this->belongsTo(User::class, 'staff_user_id');
     }
 
+    /** @return HasMany<ConsultationAttachment, $this> */
     public function attachments(): HasMany
     {
         return $this->hasMany(ConsultationAttachment::class);
     }
 
+    /** @return HasMany<Transcription, $this> */
     public function transcriptions(): HasMany
     {
         return $this->hasMany(Transcription::class);
     }
 
-    /** Mean arterial pressure, derived — never stored. */
+    /**
+     * Mean arterial pressure, derived — never stored.
+     *
+     * @return Attribute<float|null, never>
+     */
     protected function meanArterialPressure(): Attribute
     {
         return Attribute::get(function (): ?float {
