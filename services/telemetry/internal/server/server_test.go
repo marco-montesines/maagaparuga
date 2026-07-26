@@ -122,9 +122,11 @@ func TestStreamVitalsSkipsInvalidSamplesWithoutFailingTheStream(t *testing.T) {
 	if got, want := stream.reply.GetAccepted(), uint64(2); got != want {
 		t.Errorf("accepted = %d, want %d", got, want)
 	}
+
 	if got, want := stream.reply.GetRejected(), uint64(2); got != want {
 		t.Errorf("rejected = %d, want %d", got, want)
 	}
+
 	if got := len(publisher.published); got != 2 {
 		t.Errorf("published %d samples, want 2", got)
 	}
@@ -158,6 +160,7 @@ func TestPublishVitalsRejectsInvalidSample(t *testing.T) {
 	if status.Code(err) != codes.InvalidArgument {
 		t.Fatalf("got %v, want InvalidArgument", status.Code(err))
 	}
+
 	if len(publisher.published) != 0 {
 		t.Error("invalid sample must not reach the broker")
 	}

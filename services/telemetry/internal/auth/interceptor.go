@@ -42,6 +42,8 @@ type Interceptors struct {
 	Public   map[string]bool
 }
 
+// Unary returns a unary interceptor that authenticates every RPC except the
+// Public ones.
 func (i *Interceptors) Unary() grpc.UnaryServerInterceptor {
 	return func(
 		ctx context.Context,
@@ -62,6 +64,8 @@ func (i *Interceptors) Unary() grpc.UnaryServerInterceptor {
 	}
 }
 
+// Stream returns a streaming interceptor that authenticates every stream except
+// the Public ones.
 func (i *Interceptors) Stream() grpc.StreamServerInterceptor {
 	return func(
 		srv any,

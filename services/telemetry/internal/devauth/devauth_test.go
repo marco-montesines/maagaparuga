@@ -27,6 +27,7 @@ func TestClientCredentialsMintsToken(t *testing.T) {
 	t.Parallel()
 
 	var gotAuth, gotBody string
+
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		gotAuth = r.Header.Get("Authorization")
 		_ = r.ParseForm()
@@ -44,9 +45,11 @@ func TestClientCredentialsMintsToken(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
+
 	if tok != "at-abc" {
 		t.Errorf("token = %q, want at-abc", tok)
 	}
+
 	if gotAuth == "" || !strings.HasPrefix(gotAuth, "Basic ") {
 		t.Errorf("expected HTTP basic auth, got %q", gotAuth)
 	}
@@ -55,6 +58,7 @@ func TestClientCredentialsMintsToken(t *testing.T) {
 	if !strings.Contains(gotBody, "urn%3Azitadel%3Aiam%3Aorg%3Aproject%3Aid%3A999%3Aaud") {
 		t.Errorf("project-audience scope missing from request body: %s", gotBody)
 	}
+
 	if !strings.Contains(gotBody, "grant_type=client_credentials") {
 		t.Errorf("wrong grant type: %s", gotBody)
 	}

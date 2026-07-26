@@ -18,6 +18,8 @@ import (
 	telemetryv1 "maagaparuga/services/telemetry/gen/maagaparuga/telemetry/v1"
 )
 
+// JetStream naming for the vitals pipeline: the stream, its live and
+// dead-letter subjects, and the durable consumer the writer binds to.
 const (
 	StreamName    = "VITALS"
 	SubjectSample = "vitals.samples"
@@ -32,6 +34,8 @@ const (
 	nakBackoff    = 5 * time.Second
 )
 
+// Broker wraps the NATS JetStream connection and stream that carry vitals
+// samples between the ingest API and the writer.
 type Broker struct {
 	conn   *nats.Conn
 	stream jetstream.JetStream
@@ -47,6 +51,9 @@ var _ interface {
 	Publish(context.Context, *telemetryv1.VitalsSample) error
 } = (*Broker)(nil)
 
+// Connect dials NATS, initialises JetStream, and ensures the vitals stream
+// exists. It reconnects indefinitely so a broker restart does not kill the
+// service.
 func Connect(ctx context.Context, url string) (*Broker, error) {
 	conn, err := nats.Connect(url,
 		nats.MaxReconnects(-1),
@@ -88,6 +95,7 @@ func (b *Broker) ensureStream(ctx context.Context) error {
 	return nil
 }
 
+// Close drains and closes the underlying NATS connection.
 func (b *Broker) Close() {
 	b.conn.Close()
 }
@@ -120,6 +128,7 @@ func (b *Broker) deadLetter(ctx context.Context, msg jetstream.Msg, cause error)
 		// Nak instead and let it retry; the alternative is silent loss.
 		b.log("dead-letter publish failed, leaving message for redelivery",
 			"error", err, "cause", cause)
+
 		_ = msg.NakWithDelay(nakBackoff)
 
 		return
@@ -155,6 +164,10 @@ func (b *Broker) log(msg string, args ...any) {
 	b.Logf(msg, args...)
 }
 
+// Consume pulls batches of samples from the durable consumer and hands each
+// batch to handle. A batch is acked only after handle succeeds, so a
+// downstream failure redelivers (at-least-once) rather than losing data; it
+// returns when ctx is cancelled.
 func (b *Broker) Consume(
 	ctx context.Context,
 	batchSize int,

@@ -19,8 +19,10 @@ import (
 	telemetryv1 "maagaparuga/services/telemetry/gen/maagaparuga/telemetry/v1"
 )
 
+// Kind is the type of mock IoMT device, which determines the vitals it reports.
 type Kind string
 
+// The device kinds a simulated fleet cycles through.
 const (
 	KindPulseOximeter Kind = "pulse_oximeter"
 	KindThermometer   Kind = "thermometer"
@@ -45,6 +47,8 @@ type Device struct {
 	baseline map[string]float64
 }
 
+// NewDevice creates a device for one care recipient, seeded for deterministic
+// output.
 func NewDevice(id string, kind Kind, careRecipientID string, seed uint64) *Device {
 	return &Device{
 		ID:              id,
@@ -89,6 +93,7 @@ func (d *Device) Sample(t time.Time) *telemetryv1.VitalsSample {
 		if diastolic >= systolic {
 			diastolic = systolic - 30
 		}
+
 		sample.BpSystolic = &systolic
 		sample.BpDiastolic = &diastolic
 
@@ -116,6 +121,8 @@ type Fleet struct {
 	Devices []*Device
 }
 
+// NewFleet builds a fleet of devices spread across the given care recipients,
+// cycling through the device kinds.
 func NewFleet(careRecipientIDs []string, devicesPerRecipient int, seed uint64) *Fleet {
 	fleet := &Fleet{}
 

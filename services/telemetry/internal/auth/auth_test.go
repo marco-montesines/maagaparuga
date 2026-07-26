@@ -153,6 +153,7 @@ func TestVerify(t *testing.T) {
 			if err != nil {
 				t.Fatalf("expected token to verify, got: %v", err)
 			}
+
 			if claims.Subject != "device-1" {
 				t.Errorf("subject = %q, want device-1", claims.Subject)
 			}
@@ -193,6 +194,7 @@ func TestBearerToken(t *testing.T) {
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
+
 			if got != tt.want {
 				t.Errorf("got %q, want %q", got, tt.want)
 			}
@@ -261,6 +263,7 @@ func TestUnaryInterceptorRejectsUnauthenticatedCalls(t *testing.T) {
 			if status.Code(err) != codes.Unauthenticated {
 				t.Fatalf("got %v, want Unauthenticated", status.Code(err))
 			}
+
 			if called {
 				t.Error("handler must not run for an unauthenticated call")
 			}
@@ -308,6 +311,7 @@ func TestPublicMethodsSkipAuthentication(t *testing.T) {
 	if err != nil {
 		t.Fatalf("health check must not require credentials: %v", err)
 	}
+
 	if !called {
 		t.Error("handler should have run")
 	}

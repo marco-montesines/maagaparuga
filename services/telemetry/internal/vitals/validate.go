@@ -28,6 +28,7 @@ const (
 	maxSampleAge               = 24 * time.Hour
 )
 
+// Sentinel errors a sample can fail validation with; callers may match on them.
 var (
 	ErrNoDeviceID      = errors.New("device_id is required")
 	ErrNoRecipient     = errors.New("care_recipient_id is required")
@@ -57,6 +58,7 @@ func Validate(s *telemetryv1.VitalsSample, now time.Time) error {
 	if measuredAt.After(now.Add(maxClockSkew)) {
 		return ErrFutureTimestamp
 	}
+
 	if measuredAt.Before(now.Add(-maxSampleAge)) {
 		return ErrStaleTimestamp
 	}
@@ -67,54 +69,71 @@ func Validate(s *telemetryv1.VitalsSample, now time.Time) error {
 		if *v < minHeartRate || *v > maxHeartRate {
 			return rangeErr("heart_rate_bpm", *v, minHeartRate, maxHeartRate)
 		}
+
 		measurements++
 	}
+
 	if v := s.RespiratoryRate; v != nil {
 		if *v < minRespRate || *v > maxRespRate {
 			return rangeErr("respiratory_rate", *v, minRespRate, maxRespRate)
 		}
+
 		measurements++
 	}
+
 	if v := s.Spo2Percent; v != nil {
 		if err := checkFloat("spo2_percent", *v, minSpO2, maxSpO2); err != nil {
 			return err
 		}
+
 		measurements++
 	}
+
 	if v := s.BodyTempC; v != nil {
 		if err := checkFloat("body_temp_c", *v, minTempC, maxTempC); err != nil {
 			return err
 		}
+
 		measurements++
 	}
+
 	if v := s.BpSystolic; v != nil {
 		if *v < minSystolic || *v > maxSystolic {
 			return rangeErr("bp_systolic", *v, minSystolic, maxSystolic)
 		}
+
 		measurements++
 	}
+
 	if v := s.BpDiastolic; v != nil {
 		if *v < minDiastolic || *v > maxDiastolic {
 			return rangeErr("bp_diastolic", *v, minDiastolic, maxDiastolic)
 		}
+
 		measurements++
 	}
+
 	if s.BpSystolic != nil && s.BpDiastolic != nil && *s.BpDiastolic >= *s.BpSystolic {
 		return fmt.Errorf("bp_diastolic (%d) must be below bp_systolic (%d)",
 			*s.BpDiastolic, *s.BpSystolic)
 	}
+
 	if v := s.SkinResistanceOhms; v != nil {
 		if err := checkFloat("skin_resistance_ohms", *v, minSkinOhms, maxSkinOhms); err != nil {
 			return err
 		}
+
 		measurements++
 	}
+
 	if v := s.SkinPh; v != nil {
 		if err := checkFloat("skin_ph", *v, minSkinPH, maxSkinPH); err != nil {
 			return err
 		}
+
 		measurements++
 	}
+
 	if s.GetConsciousness() != telemetryv1.Consciousness_CONSCIOUSNESS_UNSPECIFIED {
 		measurements++
 	}

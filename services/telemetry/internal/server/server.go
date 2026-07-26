@@ -5,6 +5,7 @@ package server
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"log/slog"
 	"time"
@@ -35,6 +36,8 @@ type Reader interface {
 // interface, rather than discovering a mismatch at registration.
 var _ telemetryv1.VitalsServiceServer = (*Server)(nil)
 
+// Server implements the gRPC VitalsService: device ingest (validate, authorize,
+// publish) and the windowed read path.
 type Server struct {
 	telemetryv1.UnimplementedVitalsServiceServer
 
@@ -104,13 +107,18 @@ func (s *Server) StreamVitals(stream telemetryv1.VitalsService_StreamVitalsServe
 	for {
 		req, err := stream.Recv()
 		if errors.Is(err, io.EOF) {
-			return stream.SendAndClose(&telemetryv1.StreamVitalsResponse{
+			if err := stream.SendAndClose(&telemetryv1.StreamVitalsResponse{
 				Accepted: accepted,
 				Rejected: rejected,
-			})
+			}); err != nil {
+				return fmt.Errorf("close stream: %w", err)
+			}
+
+			return nil
 		}
+
 		if err != nil {
-			return err
+			return fmt.Errorf("receive from stream: %w", err)
 		}
 
 		sample := req.GetSample()
@@ -118,6 +126,7 @@ func (s *Server) StreamVitals(stream telemetryv1.VitalsService_StreamVitalsServe
 		if err := vitals.Validate(sample, s.now()); err != nil {
 			s.log.WarnContext(ctx, "rejected sample",
 				"device_id", sample.GetDeviceId(), "error", err)
+
 			rejected++
 
 			continue
@@ -172,6 +181,8 @@ func (s *Server) PublishVitals(
 	return &telemetryv1.PublishVitalsResponse{Accepted: 1}, nil
 }
 
+// GetWindow returns the vitals samples for a care recipient within a time
+// window, after checking the caller may view that recipient.
 func (s *Server) GetWindow(
 	ctx context.Context,
 	req *telemetryv1.GetWindowRequest,

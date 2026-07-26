@@ -61,10 +61,10 @@ func TestCheckFailsClosedOnServerError(t *testing.T) {
 	defer srv.Close()
 
 	err := newClientTo(t, srv.URL).Check(context.Background(), "1", authz.RelationViewer, "42")
-
 	if err == nil {
 		t.Fatal("a 500 from OpenFGA must not allow")
 	}
+
 	if errors.Is(err, authz.ErrDenied) {
 		return // ErrDenied is also acceptable — the point is "not nil"
 	}
@@ -75,7 +75,6 @@ func TestCheckFailsClosedWhenUnreachable(t *testing.T) {
 
 	// Nothing listening on this address.
 	err := newClientTo(t, "http://127.0.0.1:1").Check(context.Background(), "1", authz.RelationViewer, "42")
-
 	if err == nil {
 		t.Fatal("an unreachable OpenFGA must not allow")
 	}
@@ -101,6 +100,7 @@ func TestCheckSendsExpectedTuple(t *testing.T) {
 				User, Relation, Object string
 			} `json:"tuple_key"`
 		}
+
 		_ = decodeJSON(r, &body)
 		gotUser, gotRelation, gotObject = body.TupleKey.User, body.TupleKey.Relation, body.TupleKey.Object
 

@@ -18,6 +18,8 @@ import (
 
 const defaultWindowLimit = 500
 
+// Store is the ClickHouse-backed telemetry store: the batching writer and the
+// windowed read query.
 type Store struct {
 	conn driver.Conn
 }
@@ -27,6 +29,7 @@ var _ interface {
 	Window(context.Context, string, time.Time, time.Time, uint32) ([]*telemetryv1.VitalsSample, error)
 } = (*Store)(nil)
 
+// Config carries the ClickHouse connection coordinates.
 type Config struct {
 	Addr     string
 	Database string
@@ -34,6 +37,7 @@ type Config struct {
 	Password string
 }
 
+// Open dials ClickHouse and verifies the connection with a ping.
 func Open(ctx context.Context, cfg Config) (*Store, error) {
 	conn, err := clickhouse.Open(&clickhouse.Options{
 		Addr: []string{cfg.Addr},
@@ -55,8 +59,13 @@ func Open(ctx context.Context, cfg Config) (*Store, error) {
 	return &Store{conn: conn}, nil
 }
 
+// Close closes the underlying ClickHouse connection.
 func (s *Store) Close() error {
-	return s.conn.Close()
+	if err := s.conn.Close(); err != nil {
+		return fmt.Errorf("close clickhouse: %w", err)
+	}
+
+	return nil
 }
 
 // Migrate creates the vitals table.
@@ -166,7 +175,7 @@ LIMIT ?`
 	if err != nil {
 		return nil, fmt.Errorf("query window: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var samples []*telemetryv1.VitalsSample
 

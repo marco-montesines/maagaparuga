@@ -92,7 +92,7 @@ func runServe(ctx context.Context, log *slog.Logger, args []string) error {
 
 	bkr, err := broker.Connect(ctx, *natsURL)
 	if err != nil {
-		return err
+		return fmt.Errorf("connect broker: %w", err)
 	}
 	defer bkr.Close()
 
@@ -100,9 +100,9 @@ func runServe(ctx context.Context, log *slog.Logger, args []string) error {
 		Addr: *chAddr, Database: *chDB, Username: *chUser, Password: *chPass,
 	})
 	if err != nil {
-		return err
+		return fmt.Errorf("open store: %w", err)
 	}
-	defer st.Close()
+	defer func() { _ = st.Close() }()
 
 	serverOpts, err := authOptions(ctx, log, *authMode, *issuer, *audience)
 	if err != nil {
@@ -114,7 +114,9 @@ func runServe(ctx context.Context, log *slog.Logger, args []string) error {
 		return err
 	}
 
-	listener, err := net.Listen("tcp", *addr)
+	lc := net.ListenConfig{}
+
+	listener, err := lc.Listen(ctx, "tcp", *addr)
 	if err != nil {
 		return fmt.Errorf("listen: %w", err)
 	}
@@ -133,7 +135,11 @@ func runServe(ctx context.Context, log *slog.Logger, args []string) error {
 
 	log.Info("telemetry serving", "addr", *addr, "auth", *authMode)
 
-	return grpcServer.Serve(listener)
+	if err := grpcServer.Serve(listener); err != nil {
+		return fmt.Errorf("serve grpc: %w", err)
+	}
+
+	return nil
 }
 
 // authOptions builds the server's authentication middleware.
@@ -161,7 +167,7 @@ func authOptions(
 
 		verifier, err := auth.NewVerifier(ctx, issuer, audience)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("build token verifier: %w", err)
 		}
 
 		interceptors := &auth.Interceptors{
@@ -205,7 +211,12 @@ func authzChecker(
 			"authorized per care recipient (or -auth=disabled for local work)")
 	}
 
-	return authz.New(authz.Config{URL: url, StoreID: storeID, ModelID: modelID})
+	checker, err := authz.New(authz.Config{URL: url, StoreID: storeID, ModelID: modelID})
+	if err != nil {
+		return nil, fmt.Errorf("build authz checker: %w", err)
+	}
+
+	return checker, nil
 }
 
 func runWrite(ctx context.Context, log *slog.Logger, args []string) error {
@@ -227,7 +238,7 @@ func runWrite(ctx context.Context, log *slog.Logger, args []string) error {
 
 	bkr, err := broker.Connect(ctx, *natsURL)
 	if err != nil {
-		return err
+		return fmt.Errorf("connect broker: %w", err)
 	}
 	defer bkr.Close()
 
@@ -235,17 +246,17 @@ func runWrite(ctx context.Context, log *slog.Logger, args []string) error {
 		Addr: *chAddr, Database: *chDB, Username: *chUser, Password: *chPass,
 	})
 	if err != nil {
-		return err
+		return fmt.Errorf("open store: %w", err)
 	}
-	defer st.Close()
+	defer func() { _ = st.Close() }()
 
 	if err := st.Migrate(ctx); err != nil {
-		return err
+		return fmt.Errorf("migrate store: %w", err)
 	}
 
 	log.Info("telemetry writer consuming", "batch", *batchSize)
 
-	return bkr.Consume(ctx, *batchSize, *maxWait,
+	if err := bkr.Consume(ctx, *batchSize, *maxWait,
 		func(ctx context.Context, batch []*telemetryv1.VitalsSample) error {
 			// Defence in depth: the ingest API validates, but this consumer
 			// must not assume it is the only publisher to the stream. An
@@ -270,13 +281,17 @@ func runWrite(ctx context.Context, log *slog.Logger, args []string) error {
 			}
 
 			if err := st.InsertBatch(ctx, accepted); err != nil {
-				return err
+				return fmt.Errorf("insert batch: %w", err)
 			}
 
 			log.Info("batch written", "samples", len(accepted), "dropped", len(batch)-len(accepted))
 
 			return nil
-		})
+		}); err != nil {
+		return fmt.Errorf("consume stream: %w", err)
+	}
+
+	return nil
 }
 
 func runSimulate(ctx context.Context, log *slog.Logger, args []string) error {
@@ -316,11 +331,12 @@ func runSimulate(ctx context.Context, log *slog.Logger, args []string) error {
 	if err != nil {
 		return fmt.Errorf("dial telemetry: %w", err)
 	}
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 
 	// Devices authenticate with a bearer token the same way any client does.
 	if bearer != "" {
 		ctx = metadata.AppendToOutgoingContext(ctx, "authorization", "Bearer "+bearer)
+
 		log.Info("device authenticated", "method", *authMethod)
 	} else {
 		log.Warn("no device credentials configured — streaming without a token " +
@@ -375,7 +391,12 @@ func deviceToken(
 	method, issuer, clientID, clientSecret, projectID, keyPath, staticToken string,
 ) (string, error) {
 	if staticToken != "" {
-		return devauth.Static{Value: staticToken}.Token(ctx)
+		token, err := devauth.Static{Value: staticToken}.Token(ctx)
+		if err != nil {
+			return "", fmt.Errorf("static token: %w", err)
+		}
+
+		return token, nil
 	}
 
 	switch method {
@@ -385,12 +406,22 @@ func deviceToken(
 			return "", nil
 		}
 
-		return devauth.ClientCredentials{
+		token, err := devauth.ClientCredentials{
 			Issuer: issuer, ClientID: clientID, ClientSecret: clientSecret, ProjectID: projectID,
 		}.Token(ctx)
+		if err != nil {
+			return "", fmt.Errorf("client_credentials token: %w", err)
+		}
+
+		return token, nil
 
 	case "jwt_profile":
-		return devauth.JWTProfile{Issuer: issuer, KeyPath: keyPath, ProjectID: projectID}.Token(ctx)
+		token, err := devauth.JWTProfile{Issuer: issuer, KeyPath: keyPath, ProjectID: projectID}.Token(ctx)
+		if err != nil {
+			return "", fmt.Errorf("jwt_profile token: %w", err)
+		}
+
+		return token, nil
 
 	case "static":
 		return "", errors.New("auth-method=static requires -token (a PAT or pre-minted token)")
@@ -415,8 +446,14 @@ func serveHealth(ctx context.Context, log *slog.Logger, addr string) {
 
 	go func() {
 		<-ctx.Done()
+
+		// A fresh root context on purpose: ctx is already cancelled (that is
+		// what woke this goroutine), so the graceful-shutdown deadline must not
+		// inherit its cancellation or Shutdown would return immediately.
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
+
+		//nolint:contextcheck // shutdown ctx must NOT inherit the already-cancelled parent
 		_ = srv.Shutdown(shutdownCtx)
 	}()
 

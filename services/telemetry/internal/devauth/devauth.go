@@ -49,6 +49,7 @@ func projectAudienceScope(projectID string) string {
 // exchange happens at run time.
 type Static struct{ Value string }
 
+// Token returns the pre-minted token, or an error if none was configured.
 func (s Static) Token(context.Context) (string, error) {
 	if s.Value == "" {
 		return "", errors.New("static token is empty")
@@ -67,6 +68,7 @@ type ClientCredentials struct {
 	HTTP         *http.Client
 }
 
+// Token requests an access token via the OAuth2 client-credentials grant.
 func (c ClientCredentials) Token(ctx context.Context) (string, error) {
 	if c.Issuer == "" || c.ClientID == "" || c.ClientSecret == "" || c.ProjectID == "" {
 		return "", errors.New("client_credentials needs issuer, client id, secret and project id")
@@ -80,8 +82,9 @@ func (c ClientCredentials) Token(ctx context.Context) (string, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost,
 		strings.TrimRight(c.Issuer, "/")+"/oauth/v2/token", strings.NewReader(form.Encode()))
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("build token request: %w", err)
 	}
+
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req.SetBasicAuth(c.ClientID, c.ClientSecret)
 
@@ -115,6 +118,8 @@ type machineKey struct {
 	UserID string `json:"userId"`
 }
 
+// Token signs a JWT assertion with the device key and exchanges it for an
+// access token via the JWT-bearer grant.
 func (j JWTProfile) Token(ctx context.Context) (string, error) {
 	if j.Issuer == "" || j.KeyPath == "" || j.ProjectID == "" {
 		return "", errors.New("jwt_profile needs issuer, key path and project id")
@@ -139,8 +144,9 @@ func (j JWTProfile) Token(ctx context.Context) (string, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost,
 		strings.TrimRight(j.Issuer, "/")+"/oauth/v2/token", strings.NewReader(form.Encode()))
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("build token request: %w", err)
 	}
+
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 
 	client := j.HTTP
@@ -169,6 +175,7 @@ func (j JWTProfile) signAssertion(key *machineKey) (string, error) {
 	if j.now != nil {
 		now = j.now
 	}
+
 	t := now()
 
 	// The assertion is addressed to the issuer; ZITADEL exchanges it for an
@@ -180,9 +187,10 @@ func (j JWTProfile) signAssertion(key *machineKey) (string, error) {
 		"iat": t.Unix(),
 		"exp": t.Add(time.Hour).Unix(),
 	}
+
 	payload, err := json.Marshal(claims)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("marshal claims: %w", err)
 	}
 
 	jws, err := signer.Sign(payload)
@@ -190,7 +198,12 @@ func (j JWTProfile) signAssertion(key *machineKey) (string, error) {
 		return "", fmt.Errorf("sign assertion: %w", err)
 	}
 
-	return jws.CompactSerialize()
+	serialized, err := jws.CompactSerialize()
+	if err != nil {
+		return "", fmt.Errorf("serialize assertion: %w", err)
+	}
+
+	return serialized, nil
 }
 
 func loadMachineKey(path string) (*machineKey, error) {
@@ -241,7 +254,7 @@ func doTokenRequest(client *http.Client, req *http.Request) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("token request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	body, _ := io.ReadAll(resp.Body)
 

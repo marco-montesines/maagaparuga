@@ -54,10 +54,13 @@ type Config struct {
 	Timeout time.Duration
 }
 
+// New builds an OpenFGA check client from cfg, applying a default timeout when
+// none is set.
 func New(cfg Config) (*Client, error) {
 	if cfg.URL == "" {
 		return nil, errors.New("openfga url is required")
 	}
+
 	if cfg.StoreID == "" {
 		return nil, errors.New("openfga store id is required")
 	}

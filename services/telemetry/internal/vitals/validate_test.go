@@ -161,6 +161,7 @@ func TestValidate(t *testing.T) {
 			if tt.wantErr && err == nil {
 				t.Fatal("expected validation error, got nil")
 			}
+
 			if !tt.wantErr && err != nil {
 				t.Fatalf("expected sample to be valid, got: %v", err)
 			}

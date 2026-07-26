@@ -73,6 +73,7 @@ func TestPublishDeniedForUnrelatedRecipient(t *testing.T) {
 	if status.Code(err) != codes.PermissionDenied {
 		t.Fatalf("got %v, want PermissionDenied", status.Code(err))
 	}
+
 	if len(pub.published) != 0 {
 		t.Error("an unauthorized sample must not reach the broker")
 	}
@@ -88,6 +89,7 @@ func TestPublishAllowedForRelatedRecipient(t *testing.T) {
 		PublishVitals(authedCtx(), publishReq("1")); err != nil {
 		t.Fatalf("expected allow, got: %v", err)
 	}
+
 	if len(pub.published) != 1 {
 		t.Error("authorized sample should have been published")
 	}
@@ -106,6 +108,7 @@ func TestPublishDeniedWhenAuthzUnavailable(t *testing.T) {
 	if status.Code(err) != codes.PermissionDenied {
 		t.Fatalf("got %v, want PermissionDenied", status.Code(err))
 	}
+
 	if len(pub.published) != 0 {
 		t.Error("must not publish when authorization cannot be established")
 	}
@@ -145,9 +148,11 @@ func TestStreamAuthorizesPerRecipient(t *testing.T) {
 	if err := serverWithAuthz(pub, &fakeReader{}, checker).StreamVitals(stream); err != nil {
 		t.Fatalf("stream errored: %v", err)
 	}
+
 	if checker.calls != 1 {
 		t.Errorf("expected 1 cached authz call for one recipient, got %d", checker.calls)
 	}
+
 	if len(pub.published) != 2 {
 		t.Errorf("both authorized samples should publish, got %d", len(pub.published))
 	}
@@ -173,6 +178,7 @@ func TestStreamTerminatesOnUnauthorizedRecipient(t *testing.T) {
 	if status.Code(err) != codes.PermissionDenied {
 		t.Fatalf("got %v, want PermissionDenied", status.Code(err))
 	}
+
 	if len(pub.published) != 1 {
 		t.Errorf("only the authorized recipient's sample should publish, got %d", len(pub.published))
 	}

@@ -39,7 +39,7 @@ func (c *Client) postCheck(ctx context.Context, endpoint string, body checkReque
 	if err != nil {
 		return false, fmt.Errorf("send request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		// Read a bounded amount of the body for context, then deny.

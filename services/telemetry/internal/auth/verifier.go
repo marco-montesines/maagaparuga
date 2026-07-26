@@ -15,6 +15,7 @@ import (
 	"github.com/coreos/go-oidc/v3/oidc"
 )
 
+// Sentinel errors returned when a presented token fails a verification step.
 var (
 	ErrNoToken       = errors.New("no bearer token presented")
 	ErrBadSignature  = errors.New("token signature is not valid")

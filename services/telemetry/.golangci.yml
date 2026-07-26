@@ -37,8 +37,21 @@ linters:
         - name: context-as-argument
         - name: indent-error-flow
     wrapcheck:
+      # golangci-lint v2 REPLACES wrapcheck's built-in ignore-sigs when this key
+      # is set (it does not append), so the defaults must be re-listed — otherwise
+      # every fmt.Errorf("…: %w", err) / errors.New(…) is flagged as "unwrapped".
+      # Defaults + our gRPC status constructors (already contextual).
       ignore-sigs:
-        - status.Error(       # gRPC status errors are already contextual
+        - .Errorf(
+        - errors.New(
+        - errors.Unwrap(
+        - errors.Join(
+        - .Wrap(
+        - .Wrapf(
+        - .WithMessage(
+        - .WithMessagef(
+        - .WithStack(
+        - status.Error(
         - status.Errorf(
 
   exclusions:
