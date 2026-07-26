@@ -59,6 +59,9 @@ class Consultation extends Model
      */
     protected function meanArterialPressure(): Attribute
     {
+        // larastan Attribute-accessor false positive: it reports the correct
+        // Attribute<float|null, never> return as mismatching itself.
+        // @phpstan-ignore-next-line
         return Attribute::get(function (): ?float {
             if ($this->bp_systolic === null || $this->bp_diastolic === null) {
                 return null;

@@ -15,6 +15,8 @@ use Illuminate\Notifications\Notifiable;
  * anti-pattern from the predecessor systems). Authentication is delegated to
  * ZITADEL — `zitadel_sub` is the identity key; there is no usable local
  * password.
+ *
+ * @property Role $role
  */
 class User extends Authenticatable
 {
