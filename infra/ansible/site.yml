@@ -11,14 +11,14 @@
   roles:
     - common
 
-- name: k3s control plane (server node)
+- name: K3s control plane (server node)
   hosts: k3s_server
   become: true
   roles:
     - role: k3s
       k3s_role: server
 
-- name: k3s workers (agent nodes)
+- name: K3s workers (agent nodes)
   hosts: k3s_agents
   become: true
   roles:

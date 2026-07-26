@@ -6,13 +6,14 @@ use App\Models\CareRecipient;
 use App\Models\User;
 use Database\Seeders\DatabaseSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Queue;
 
 uses(RefreshDatabase::class);
 
 beforeEach(function () {
     // Keep the suite hermetic: seeding triggers the transcription-indexing
     // job (sync queue in tests would call OpenSearch over the network).
-    \Illuminate\Support\Facades\Queue::fake();
+    Queue::fake();
 });
 
 it('seeds the fictitious care domain', function () {

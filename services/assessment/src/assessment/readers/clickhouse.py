@@ -55,17 +55,24 @@ class ClickHouseVitalsReader:
     def __init__(
         self, *, host: str, port: int, database: str, user: str, password: str
     ) -> None:
-        self._cfg = {
-            "host": host, "port": port, "database": database,
-            "username": user, "password": password,
-        }
+        self._host = host
+        self._port = port
+        self._database = database
+        self._user = user
+        self._password = password
         self._client: Any = None
 
     def _connect(self) -> Any:
         if self._client is None:
             import clickhouse_connect
 
-            self._client = clickhouse_connect.get_client(**self._cfg)
+            self._client = clickhouse_connect.get_client(
+                host=self._host,
+                port=self._port,
+                database=self._database,
+                username=self._user,
+                password=self._password,
+            )
         return self._client
 
     def window(

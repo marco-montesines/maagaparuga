@@ -24,8 +24,8 @@
     cmd: >
       k3s kubectl apply --server-side -f
       https://github.com/cloudnative-pg/cloudnative-pg/releases/download/v{{ cnpg_version }}/cnpg-{{ cnpg_version }}.yaml
-  register: cnpg_apply
-  changed_when: "'created' in cnpg_apply.stdout or 'configured' in cnpg_apply.stdout"
+  register: deploy_cnpg_apply
+  changed_when: "'created' in deploy_cnpg_apply.stdout or 'configured' in deploy_cnpg_apply.stdout"
 
 - name: Wait for the CNPG operator to be ready
   ansible.builtin.command:
@@ -39,36 +39,41 @@
 - name: Ensure the app namespace exists (for the pull secret)
   ansible.builtin.command:
     cmd: k3s kubectl create namespace maagaparuga --dry-run=client -o yaml
-  register: ns_manifest
+  register: deploy_ns_manifest
   changed_when: false
   when: ghcr_pull_token | default('') | length > 0
 
 - name: Apply the app namespace
   ansible.builtin.shell:
-    cmd: echo '{{ ns_manifest.stdout }}' | k3s kubectl apply -f -
-  changed_when: "'created' in ns_apply.stdout"
-  register: ns_apply
+    cmd: set -o pipefail; echo '{{ deploy_ns_manifest.stdout }}' | k3s kubectl apply -f -
+  args:
+    executable: /bin/bash
+  changed_when: "'created' in deploy_ns_apply.stdout"
+  register: deploy_ns_apply
   when: ghcr_pull_token | default('') | length > 0
 
 - name: Create/update the GHCR image-pull secret
   ansible.builtin.shell:
     cmd: >
+      set -o pipefail;
       k3s kubectl -n maagaparuga create secret docker-registry ghcr-pull
       --docker-server=ghcr.io
       --docker-username={{ ghcr_username }}
       --docker-password='{{ ghcr_pull_token }}'
       --dry-run=client -o yaml | k3s kubectl apply -f -
-  register: ghcr_secret
-  changed_when: "'created' in ghcr_secret.stdout or 'configured' in ghcr_secret.stdout"
+  args:
+    executable: /bin/bash
+  register: deploy_ghcr_secret
+  changed_when: "'created' in deploy_ghcr_secret.stdout or 'configured' in deploy_ghcr_secret.stdout"
   no_log: true
   when: ghcr_pull_token | default('') | length > 0
 
-- name: Apply the {{ env }} overlay
+- name: Apply the kustomize overlay for {{ env }}
   ansible.builtin.command:
     cmd: k3s kubectl apply -k /opt/maagaparuga/deploy/k8s/overlays/{{ env }}
-  register: kubectl_apply
-  changed_when: "'created' in kubectl_apply.stdout or 'configured' in kubectl_apply.stdout"
+  register: deploy_kubectl_apply
+  changed_when: "'created' in deploy_kubectl_apply.stdout or 'configured' in deploy_kubectl_apply.stdout"
 
 - name: Show what changed
   ansible.builtin.debug:
-    var: kubectl_apply.stdout_lines
+    var: deploy_kubectl_apply.stdout_lines

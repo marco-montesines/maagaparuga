@@ -4,7 +4,7 @@
 ---
 - name: Find the private network interface (the NIC holding private_ip)
   ansible.builtin.set_fact:
-    priv_iface: >-
+    k3s_priv_iface: >-
       {{ ansible_facts.interfaces
          | map('extract', ansible_facts)
          | selectattr('ipv4', 'defined')
@@ -17,10 +17,11 @@
   register: k3s_bin
 
 # --- Control-plane node --------------------------------------------------
-- name: Install k3s server (control plane)
+- name: Install k3s server (control plane)  # noqa: command-instead-of-module
   when: k3s_role == 'server' and not k3s_bin.stat.exists
   ansible.builtin.shell:
     cmd: >
+      set -o pipefail;
       curl -sfL https://get.k3s.io |
       INSTALL_K3S_CHANNEL={{ k3s_channel }}
       {% if k3s_version %}INSTALL_K3S_VERSION={{ k3s_version }}{% endif %}
@@ -28,11 +29,12 @@
       --node-ip {{ private_ip }}
       --node-external-ip {{ ansible_host }}
       --advertise-address {{ private_ip }}
-      --flannel-iface {{ priv_iface }}
+      --flannel-iface {{ k3s_priv_iface }}
       --tls-san {{ ansible_host }}
       {{ k3s_server_extra_args }}
   args:
     creates: /usr/local/bin/k3s
+    executable: /bin/bash
 
 - name: Read the k3s node-token (to join agents)
   when: k3s_role == 'server'
@@ -46,10 +48,11 @@
     k3s_node_token: "{{ k3s_token_raw.content | b64decode | trim }}"
 
 # --- Worker nodes --------------------------------------------------------
-- name: Install k3s agent (worker)
+- name: Install k3s agent (worker)  # noqa: command-instead-of-module
   when: k3s_role == 'agent' and not k3s_bin.stat.exists
   ansible.builtin.shell:
     cmd: >
+      set -o pipefail;
       curl -sfL https://get.k3s.io |
       INSTALL_K3S_CHANNEL={{ k3s_channel }}
       {% if k3s_version %}INSTALL_K3S_VERSION={{ k3s_version }}{% endif %}
@@ -58,7 +61,8 @@
       sh -s - agent
       --node-ip {{ private_ip }}
       --node-external-ip {{ ansible_host }}
-      --flannel-iface {{ priv_iface }}
+      --flannel-iface {{ k3s_priv_iface }}
       {{ k3s_agent_extra_args }}
   args:
     creates: /usr/local/bin/k3s
+    executable: /bin/bash
