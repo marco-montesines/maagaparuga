@@ -7,7 +7,7 @@
 # Only services/telemetry/ is COPYed, but exclude secret-shaped + VCS + heavy
 # paths across the whole context as defense-in-depth (blacklist form avoids the
 # .dockerignore parent-exclusion gotcha). On CI the context is only tracked files
-# anyway (gitignored .claude/, env.sh, *.tfvars are never checked out).
+# anyway (gitignored local files — env, tfvars — are never checked out).
 .git
 **/.env
 **/.env.*
@@ -19,4 +19,3 @@
 **/node_modules
 **/vendor
 **/__pycache__
-.claude

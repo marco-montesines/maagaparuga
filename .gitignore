@@ -1,7 +1,3 @@
-# --- Claude Code workspace (local only, never pushed) ---
-.claude/
-CLAUDE.md
-
 # --- Secrets & environment ---
 .env
 .env.*
