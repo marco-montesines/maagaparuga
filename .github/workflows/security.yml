@@ -50,11 +50,11 @@ jobs:
         run: curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b /usr/local/bin
       # Blocking: dependency vulnerabilities + committed secrets.
       - name: Trivy — vulns + secrets (blocking)
-        run: trivy fs --scanners vuln,secret --severity HIGH,CRITICAL --exit-code 1 --ignore-unfixed --no-progress .
+        run: trivy fs --scanners vuln,secret --severity HIGH,CRITICAL --exit-code 1 --ignore-unfixed --quiet .
       # Report-only: IaC misconfig overlaps the tracked k8s-hardening backlog, so
       # it surfaces findings for visibility without failing the build (yet).
       - name: Trivy — IaC misconfig (report-only)
-        run: trivy config --severity HIGH,CRITICAL --exit-code 0 --no-progress .
+        run: trivy config --severity HIGH,CRITICAL --exit-code 0 --quiet .
 
   python-deps:
     name: Python deps — pip-audit + bandit (${{ matrix.service }})
@@ -104,8 +104,10 @@ jobs:
           tools: composer:v2
           coverage: none
       - run: composer install --no-interaction --no-progress --prefer-dist
+      # Fail on real advisories only; abandoned packages are reported, not fatal
+      # (e.g. the OpenFGA PHP SDK is marked abandoned upstream but not vulnerable).
       - name: composer audit
-        run: composer audit
+        run: composer audit --abandoned=report
 
   dependency-review:
     name: Dependency review
