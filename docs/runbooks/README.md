@@ -5,7 +5,7 @@ fired — now what?** It states what the alert means, the blast radius, how to
 diagnose, and how to remediate, so a responder can act without archaeology.
 
 Alert rules live as provisioned code in
-[`deploy/k8s/base/observability/`](../../deploy/k8s/base/observability); each
+[`deploy/k8s/base/observability/`](https://github.com/marco-montesines/maagaparuga/blob/master/deploy/k8s/base/observability); each
 rule's `runbook:` annotation points at a file here.
 
 | Alert | Runbook |

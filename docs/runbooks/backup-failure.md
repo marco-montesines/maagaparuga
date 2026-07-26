@@ -14,7 +14,7 @@ stays broken widens the window of data that cannot be recovered — and on a car
 platform the threat model includes ransomware, where an intact, recent,
 immutable backup is the difference between an incident and a catastrophe. Treat
 it as a high-priority page, not a warning. (Strategy:
-[../../deploy/k8s/DISASTER-RECOVERY.md](../../deploy/k8s/DISASTER-RECOVERY.md).)
+[../../deploy/k8s/DISASTER-RECOVERY.md](https://github.com/marco-montesines/maagaparuga/blob/master/deploy/k8s/DISASTER-RECOVERY.md).)
 
 ## Diagnose
 

@@ -48,6 +48,15 @@ application code *and* the infrastructure that runs it:
 care provider (for elderly, sick, terminally ill, and autistic individuals), and the
 patient / care recipient. All seeded personas are **clearly fictitious**.
 
+## Documentation
+
+Full documentation lives in **[`docs/`](docs/index.md)** (also published as a
+[browsable site](https://marco-montesines.github.io/maagaparuga/)): [installation](docs/getting-started/installation.md)
+and [configuration](docs/getting-started/configuration.md), [deployment](docs/getting-started/deployment.md),
+the [integration guides](docs/integration/README.md) (IoMT devices, gRPC / GraphQL / REST APIs),
+the [architecture overview](docs/architecture/overview.md) and
+[decision records](docs/adr/README.md), and [operations & runbooks](docs/operations/README.md).
+
 ## The decided stack at a glance
 
 Each row is backed by an [Architecture Decision Record](docs/adr/README.md) that names

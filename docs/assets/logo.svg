@@ -1,0 +1,34 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" role="img">
+  <title>MaagapAruga</title>
+  <defs>
+    <!-- Heart Gradient (Teal Brand Palette) -->
+    <linearGradient id="heartGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#14b8a6" />
+      <stop offset="100%" stop-color="#0f766e" />
+    </linearGradient>
+
+    <!-- Pulse Line Gradient (Active / Proactive Telemetry) -->
+    <linearGradient id="pulseGrad" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#0d9488" />
+      <stop offset="50%" stop-color="#14b8a6" />
+      <stop offset="100%" stop-color="#0f766e" />
+    </linearGradient>
+
+    <!-- Cutout mask to ensure legibility on both light and dark backgrounds -->
+    <mask id="cutoutMask">
+      <rect x="0" y="0" width="48" height="48" fill="#ffffff" />
+      <path d="M 2,24 H 13 L 16,26 L 19,14 L 22,34 L 25,10 L 28,29 L 31,24 H 46"
+            fill="none" stroke="#000000" stroke-width="6.5"
+            stroke-linecap="round" stroke-linejoin="round" />
+    </mask>
+  </defs>
+
+  <!-- Stylized Shield-Heart Structure -->
+  <path d="M 24,11 C 21,7.5 16,6.5 12,8.5 C 7,11 5,16.5 6,22.5 C 7.5,30 16,36.5 24,41 C 32,36.5 40.5,30 42,22.5 C 43,16.5 41,11 36,8.5 C 32,6.5 27,7.5 24,11 Z"
+        fill="url(#heartGrad)" mask="url(#cutoutMask)" />
+
+  <!-- ECG Heartbeat / Telemetry Line -->
+  <path d="M 2,24 H 13 L 16,26 L 19,14 L 22,34 L 25,10 L 28,29 L 31,24 H 46"
+        fill="none" stroke="url(#pulseGrad)" stroke-width="3"
+        stroke-linecap="round" stroke-linejoin="round" />
+</svg>

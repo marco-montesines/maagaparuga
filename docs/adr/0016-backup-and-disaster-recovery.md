@@ -94,7 +94,7 @@ version-controlled infrastructure per environment — reproducible and auditable
 not a manual runbook. This decouples cleanly from the core-infra provider choice
 (the cluster + private network is one placement decision; the backup target is
 another) — a hybrid, provider-portable topology. Full strategy:
-[deploy/k8s/DISASTER-RECOVERY.md](../../deploy/k8s/DISASTER-RECOVERY.md).
+[deploy/k8s/DISASTER-RECOVERY.md](https://github.com/marco-montesines/maagaparuga/blob/master/deploy/k8s/DISASTER-RECOVERY.md).
 
 ## Consequences
 
