@@ -50,6 +50,12 @@ jobs:
     if: github.event_name != 'pull_request'
     needs: build
     runs-on: ubuntu-latest
+    # Non-blocking: publishing needs GitHub Pages enabled (Settings -> Pages ->
+    # Source: "GitHub Actions"; on a private repo that requires GitHub Pro).
+    # Until then this step no-ops with a warning instead of failing the run; the
+    # strict build above is the real gate. It publishes automatically once Pages
+    # is enabled.
+    continue-on-error: true
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
