@@ -1,0 +1,13 @@
+includes:
+    - vendor/larastan/larastan/extension.neon
+
+parameters:
+    paths:
+        - app
+        - database
+    level: 6
+    # PHPStan 2.x removed the `checkMissingIterableValueType` option; ignoring the
+    # equivalent error identifier keeps the prior behaviour (level 6 without the
+    # "no value type specified in iterable type array" nag).
+    ignoreErrors:
+        - identifier: missingType.iterableValue

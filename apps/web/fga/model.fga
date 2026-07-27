@@ -1,0 +1,39 @@
+model
+  schema 1.1
+
+# MaagapAruga authorization model (ADR 0009).
+# The relationship data ("tuples") mirrors care_team_assignments rows —
+# the database row is the source of truth, the FGA tuple is the enforcement
+# copy, kept in sync by the CareTeamAssignment observer.
+
+type user
+
+type care_recipient
+  relations
+    # The care recipient's own account, if they have one.
+    define owner: [user]
+
+    # Any staff member assigned via care_team_assignments.
+    define assigned_staff: [user]
+
+    # IoMT emitters permitted to stream this recipient's vitals. A device is a
+    # first-class principal, distinct from staff: it may write vitals and
+    # nothing else, and "which devices emit for whom" is audited on its own.
+    define device: [user]
+
+    # Trusted internal read-only services (e.g. the assessment scoring engine
+    # reading vitals windows via the telemetry gRPC API). A first-class principal
+    # so a service can READ without being granted staff (which would also let it
+    # write) — least privilege, and audited on its own tuples.
+    define service_reader: [user]
+
+    # Who may read the record.
+    define viewer: assigned_staff or owner or service_reader
+
+    # Who may write clinical content (notes, consultations) — staff only.
+    define editor: assigned_staff
+
+    # Who may write vitals (telemetry ingest): assigned staff (manual entry) or
+    # a provisioned device. Kept separate from editor so a device can never
+    # write clinical content, only measurements — least privilege by write kind.
+    define vitals_writer: assigned_staff or device
