@@ -11,7 +11,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 /**
  * Written by the assessment service (NEWS2, DASS21 subscales, fuzzy risk).
  *
- * @property RiskLevel $risk_level
+ * @property ?RiskLevel $risk_level
  */
 class AssessmentResult extends Model
 {

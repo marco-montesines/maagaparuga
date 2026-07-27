@@ -171,11 +171,12 @@ class DatabaseSeeder extends Seeder
                 ],
             );
 
-            if ($result->risk_level?->triggersAlert()) {
+            $risk = $result->risk_level;
+            if ($risk?->triggersAlert()) {
                 Alert::updateOrCreate(
                     ['care_recipient_id' => $recipient->id, 'assessment_result_id' => $result->id],
                     [
-                        'severity' => $result->risk_level->value,
+                        'severity' => $risk->value,
                         'title' => 'Early-warning score above threshold',
                         'body' => 'Synthetic alert generated from mock data — review the vitals window.',
                     ],
