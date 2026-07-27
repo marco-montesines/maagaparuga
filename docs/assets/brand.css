@@ -1,34 +1,118 @@
-/* MaagapAruga brand palette — the exact teal from the web app's welcome page
-   (Tailwind teal-500/600/700/800), applied over MkDocs Material's variables so
-   the docs site matches the product. */
+/* MaagapAruga docs theme — skinned to match the platform's welcome page:
+   Inter, the exact teal brand scale, slate surfaces, a subtle teal dot-grid, a
+   white/slate translucent header, and soft rounded cards. */
+
+/* ---------- palette: teal brand + slate surfaces (light) ------------------ */
 :root {
   --md-primary-fg-color:        #0f766e; /* teal-700 */
   --md-primary-fg-color--light: #14b8a6; /* teal-500 */
   --md-primary-fg-color--dark:  #115e59; /* teal-800 */
   --md-accent-fg-color:         #0d9488; /* teal-600 */
   --md-typeset-a-color:         #0d9488;
+  --md-default-bg-color:        #f8fafc; /* slate-50  */
+  --md-code-bg-color:           #f1f5f9; /* slate-100 */
+
+  --mg-border:  rgba(148, 163, 184, 0.22); /* slate-400/22 */
+  --mg-grid-a:  rgba(20, 184, 166, 0.08);
+  --mg-grid-b:  rgba(20, 184, 166, 0.05);
+  --mg-header:  rgba(255, 255, 255, 0.82);
 }
 
-/* Dark mode: lift the teal so it stays vivid on slate. */
+/* ---------- palette: slate-950 surfaces (dark) ---------------------------- */
 [data-md-color-scheme="slate"] {
   --md-primary-fg-color:  #14b8a6;
   --md-accent-fg-color:   #2dd4bf; /* teal-400 */
   --md-typeset-a-color:   #2dd4bf;
+  --md-default-bg-color:  #020617; /* slate-950 */
+  --md-code-bg-color:     #0f172a; /* slate-900 */
+
+  --mg-border:  rgba(51, 65, 85, 0.6); /* slate-700/60 */
+  --mg-grid-a:  rgba(20, 184, 166, 0.05);
+  --mg-grid-b:  rgba(20, 184, 166, 0.02);
+  --mg-header:  rgba(2, 6, 23, 0.82);
 }
 
-/* Home hero */
+/* ---------- signature dot-grid behind the content ------------------------- */
+.md-main {
+  background-image:
+    radial-gradient(var(--mg-grid-a) 1px, transparent 1px),
+    radial-gradient(var(--mg-grid-b) 1px, transparent 1px);
+  background-size: 40px 40px;
+  background-position: 0 0, 20px 20px;
+}
+
+/* ---------- header: white/slate translucent (like the landing) ------------ */
+.md-header {
+  background-color: var(--mg-header);
+  color: var(--md-default-fg-color);
+  backdrop-filter: saturate(180%) blur(8px);
+  -webkit-backdrop-filter: saturate(180%) blur(8px);
+  border-bottom: 1px solid var(--mg-border);
+  box-shadow: none;
+}
+/* dark text/icons on the light bar */
+.md-header__title,
+.md-header__topic,
+.md-header__button,
+.md-header__source,
+.md-tabs__link {
+  color: var(--md-default-fg-color);
+}
+.md-tabs {
+  background-color: transparent;
+  color: var(--md-default-fg-color);
+  border-bottom: 1px solid var(--mg-border);
+}
+.md-tabs__link--active,
+.md-tabs__link:hover { color: var(--md-accent-fg-color); opacity: 1; }
+
+/* search field on the light header */
+.md-search__form {
+  background-color: rgba(148, 163, 184, 0.14);
+  border-radius: 8px;
+  box-shadow: none;
+}
+.md-search__form:hover { background-color: rgba(148, 163, 184, 0.22); }
+.md-search__input { color: var(--md-default-fg-color); }
+.md-search__input::placeholder { color: var(--md-default-fg-color--light); }
+.md-search__icon { color: var(--md-default-fg-color--light); }
+
+/* ---------- soft, rounded components (landing's rounded-lg + subtle shadow) */
+.md-typeset pre > code,
+.md-typeset .highlight,
+.md-typeset .admonition,
+.md-typeset details,
+.md-typeset table:not([class]) { border-radius: 10px; }
+
+.md-typeset .grid.cards > :is(ul, ol) > li,
+.md-typeset .grid > .card {
+  border: 1px solid var(--mg-border);
+  border-radius: 14px;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
+}
+.md-typeset .grid.cards > :is(ul, ol) > li:hover {
+  border-color: var(--md-accent-fg-color);
+  box-shadow: 0 6px 24px rgba(20, 184, 166, 0.14);
+  transform: translateY(-2px);
+}
+
+/* buttons/links pick up the teal */
+.md-typeset .md-button--primary {
+  background-color: var(--md-primary-fg-color);
+  border-color: var(--md-primary-fg-color);
+}
+
+/* ---------- home hero ----------------------------------------------------- */
 .mg-hero {
   text-align: center;
   padding: 2.5rem 1rem 1rem;
 }
-.mg-hero img {
-  width: 96px;
-  height: 96px;
-}
+.mg-hero img { width: 96px; height: 96px; }
 .mg-hero h1 {
   margin: 0.6rem 0 0.2rem;
-  font-weight: 700;
-  letter-spacing: -0.01em;
+  font-weight: 800;
+  letter-spacing: -0.02em;
 }
 .mg-hero .mg-tagline {
   color: var(--md-default-fg-color--light);
