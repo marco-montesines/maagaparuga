@@ -1,0 +1,48 @@
+# --- Secrets & environment ---
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*_rsa
+*_ed25519
+
+# --- Terraform / OpenTofu / Terragrunt ---
+**/.terraform/
+**/.terragrunt-cache/
+*.tfstate
+*.tfstate.*
+*.tfvars
+!*.tfvars.example
+crash.log
+# lockfiles ARE committed:
+!.terraform.lock.hcl
+
+# --- Ansible ---
+*.retry
+infra/ansible/inventories/staging/hosts.yml
+infra/ansible/inventories/production/hosts.yml
+**/vault.yml
+
+# --- PHP ---
+apps/web/vendor/
+apps/web/node_modules/
+
+# --- Go ---
+services/telemetry/bin/
+services/telemetry/coverage.out
+
+# --- Python ---
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
+.ruff_cache/
+
+# --- IDE / OS ---
+.idea/
+.vscode/
+.DS_Store
+
+# compiled bootstrap binary (build artifact)
+tools/zitadel-bootstrap/zitadel-bootstrap

@@ -1,0 +1,24 @@
+# gitleaks configuration. Extends the default ruleset and allowlists a small set
+# of VERIFIED false positives. This is a mock-data-only project with no real
+# secrets committed (see data/mock/README.md) — the matches below are placeholder
+# templates, shell-variable interpolation, and HCL variable references, never
+# literal credentials.
+title = "maagaparuga gitleaks config"
+
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Placeholder templates (*.example) and REPLACE_* tokens"
+paths = ['''\.example$''']
+regexes = ['''REPLACE_WITH_[A-Z0-9_]+''']
+
+[[allowlists]]
+description = "Shell-variable interpolation in Makefile curl -u calls (client-id:secret read at runtime, not literals). Matches the $VAR:$VAR / $$VAR:$$VAR pair regardless of line-continuation splitting."
+regexTarget = "match"
+regexes = ['''\$\$?[A-Za-z_]+:\$\$?[A-Za-z_]+''']
+
+[[allowlists]]
+description = "HCL variable references, not API keys"
+regexTarget = "line"
+regexes = ['''k8s_api_allowed_ips\s*=\s*var\.''']

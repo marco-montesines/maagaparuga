@@ -1,0 +1,73 @@
+# Automated dependency + action-version updates across every ecosystem in the
+# monorepo. Monthly, grouped to keep PR noise low. GitHub Actions updates also
+# keep the action refs current.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    groups:
+      actions:
+        patterns: ["*"]
+
+  - package-ecosystem: composer
+    directory: /apps/web
+    schedule:
+      interval: monthly
+    groups:
+      php:
+        patterns: ["*"]
+
+  - package-ecosystem: npm
+    directory: /apps/web
+    schedule:
+      interval: monthly
+    groups:
+      js:
+        patterns: ["*"]
+
+  - package-ecosystem: gomod
+    directory: /services/telemetry
+    schedule:
+      interval: monthly
+    groups:
+      go:
+        patterns: ["*"]
+
+  - package-ecosystem: pip
+    directory: /services/assessment
+    schedule:
+      interval: monthly
+    groups:
+      python-assessment:
+        patterns: ["*"]
+
+  - package-ecosystem: pip
+    directory: /services/media
+    schedule:
+      interval: monthly
+    groups:
+      python-media:
+        patterns: ["*"]
+
+  - package-ecosystem: docker
+    directories:
+      - /apps/web
+      - /services/telemetry
+      - /services/assessment
+      - /services/media
+      - /tools/zitadel-bootstrap
+    schedule:
+      interval: monthly
+    groups:
+      base-images:
+        patterns: ["*"]
+
+  - package-ecosystem: terraform
+    directory: /infra
+    schedule:
+      interval: monthly
+    groups:
+      terraform:
+        patterns: ["*"]
