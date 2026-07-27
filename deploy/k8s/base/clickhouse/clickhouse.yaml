@@ -1,0 +1,165 @@
+# ClickHouse — vitals time-series store (ADR 0005).
+# Single node by default; the cluster overlay demonstrates 3 nodes + 3x Keeper
+# (Keeper runs EMBEDDED in clickhouse-server on the first K nodes — no
+# standalone keeper tier; quorum count must be odd).
+#
+# Tuning below is derived from an operated production ClickHouse cluster:
+# - zz-reduce-logging.xml: system-log TTLs + 'information' log level. Without
+#   this, trace-level logging once filled 185 GB of disk with system.text_log
+#   rows in production. The zz- prefix makes it load last and win.
+# - memory-limits.xml: per-query/user caps + disk-spill thresholds using the
+#   same ratios as production (~1/2 RAM per query, ~1/4 RAM spill); values here
+#   are scaled to this pod's limit — cloud overlays rescale them.
+# - zz-server-memory.xml: server caches + pools sized for the pod (the stock
+#   defaults assume a many-core, many-GB host and OOM a small container).
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: clickhouse-tuning
+data:
+  zz-reduce-logging.xml: |
+    <clickhouse>
+      <logger><level>information</level></logger>
+      <query_log><ttl>event_date + INTERVAL 14 DAY DELETE</ttl></query_log>
+      <trace_log><ttl>event_date + INTERVAL 3 DAY DELETE</ttl></trace_log>
+      <text_log>
+        <level>information</level>
+        <ttl>event_date + INTERVAL 7 DAY DELETE</ttl>
+      </text_log>
+      <part_log><ttl>event_date + INTERVAL 7 DAY DELETE</ttl></part_log>
+      <metric_log><ttl>event_date + INTERVAL 7 DAY DELETE</ttl></metric_log>
+      <asynchronous_metric_log><ttl>event_date + INTERVAL 7 DAY DELETE</ttl></asynchronous_metric_log>
+      <query_metric_log><ttl>event_date + INTERVAL 7 DAY DELETE</ttl></query_metric_log>
+      <processors_profile_log><ttl>event_date + INTERVAL 3 DAY DELETE</ttl></processors_profile_log>
+      <error_log><ttl>event_date + INTERVAL 30 DAY DELETE</ttl></error_log>
+    </clickhouse>
+  zz-server-memory.xml: |
+    <clickhouse>
+      <!-- Scaled to this pod's limit. Two lessons, both learned the hard way:
+           (1) ClickHouse's DEFAULT caches assume a large host (mark cache
+           5 GiB, uncompressed 8 GiB) and OOM a small container;
+           (2) the server cap must sit ABOVE ClickHouse's own resident set and
+           below the pod limit — cap it under the baseline and the server
+           refuses its own startup allocations. Measured floor for an idle
+           tuned server here is ~2 GiB, so this is not a knob that makes
+           ClickHouse small: it makes it predictable. Cloud overlays raise
+           all of these with the VM class. -->
+      <max_server_memory_usage>2500000000</max_server_memory_usage>
+      <max_thread_pool_size>1000</max_thread_pool_size>
+      <mark_cache_size>268435456</mark_cache_size>
+      <uncompressed_cache_size>134217728</uncompressed_cache_size>
+    </clickhouse>
+  memory-limits.xml: |
+    <clickhouse>
+      <profiles>
+        <default>
+          <max_memory_usage>500000000</max_memory_usage>
+          <max_memory_usage_for_user>700000000</max_memory_usage_for_user>
+          <max_bytes_before_external_group_by>250000000</max_bytes_before_external_group_by>
+          <max_bytes_before_external_sort>250000000</max_bytes_before_external_sort>
+          <join_algorithm>auto</join_algorithm>
+        </default>
+      </profiles>
+    </clickhouse>
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: clickhouse
+spec:
+  serviceName: clickhouse
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: clickhouse
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: clickhouse
+        app.kubernetes.io/part-of: maagaparuga
+    spec:
+      containers:
+        - name: clickhouse
+          image: clickhouse/clickhouse-server:pinned
+          ports:
+            - name: http
+              containerPort: 8123
+            - name: native
+              containerPort: 9000
+          env:
+            - name: CLICKHOUSE_DB
+              value: maagaparuga
+            - name: CLICKHOUSE_USER
+              valueFrom:
+                secretKeyRef:
+                  name: clickhouse-credentials
+                  key: username
+            - name: CLICKHOUSE_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: clickhouse-credentials
+                  key: password
+          resources:
+            requests:
+              cpu: 200m
+              memory: 1500Mi
+            limits:
+              memory: 3Gi
+          # Startup gates liveness so a slow first boot (schema, part loading)
+          # is never mistaken for a hang: up to 5 minutes to answer /ping.
+          startupProbe:
+            httpGet:
+              path: /ping
+              port: http
+            periodSeconds: 10
+            failureThreshold: 30
+          readinessProbe:
+            httpGet:
+              path: /ping
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /ping
+              port: http
+            periodSeconds: 15
+            timeoutSeconds: 5
+            failureThreshold: 4
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/clickhouse
+            - name: tuning
+              mountPath: /etc/clickhouse-server/config.d/zz-reduce-logging.xml
+              subPath: zz-reduce-logging.xml
+            - name: tuning
+              mountPath: /etc/clickhouse-server/config.d/zz-server-memory.xml
+              subPath: zz-server-memory.xml
+            - name: tuning
+              mountPath: /etc/clickhouse-server/users.d/memory-limits.xml
+              subPath: memory-limits.xml
+      volumes:
+        - name: tuning
+          configMap:
+            name: clickhouse-tuning
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 2Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: clickhouse
+spec:
+  selector:
+    app.kubernetes.io/name: clickhouse
+  ports:
+    - name: http
+      port: 8123
+    - name: native
+      port: 9000

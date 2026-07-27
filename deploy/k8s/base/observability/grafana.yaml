@@ -1,0 +1,170 @@
+# Grafana — dashboards + UNIFIED ALERTING (ADR 0005; alerts as code, no Loki).
+# The alert rules, datasource, and contact point are provisioned from
+# ConfigMaps below — version-controlled, reviewable, reproducible: no
+# click-ops. The first rule is the Postgres backup-failure alert.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-datasources
+data:
+  datasources.yaml: |
+    apiVersion: 1
+    datasources:
+      - name: Prometheus
+        uid: prometheus
+        type: prometheus
+        access: proxy
+        url: http://prometheus:9090
+        isDefault: true
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-alerting
+data:
+  # Contact point + policy: where a firing alert is delivered. The dev target
+  # is a placeholder webhook; cloud overlays point it at real on-call
+  # (Slack/PagerDuty/email).
+  contactpoints.yaml: |
+    apiVersion: 1
+    contactPoints:
+      - orgId: 1
+        name: backup-oncall
+        receivers:
+          - uid: backup-webhook
+            type: webhook
+            settings:
+              url: http://alert-sink:9099/
+    policies:
+      - orgId: 1
+        receiver: backup-oncall
+        group_by: [alertname]
+  # The alert rule. Fires when the most recent base backup ATTEMPT failed
+  # (last-failed timestamp newer than last-successful). Healthy = no data on
+  # query A, so noDataState=OK keeps it silent when backups are fine.
+  rules.yaml: |
+    apiVersion: 1
+    groups:
+      - orgId: 1
+        name: backups
+        folder: MaagapAruga
+        interval: 30s
+        rules:
+          - uid: cnpg-backup-failed
+            title: PostgresBackupFailed
+            condition: C
+            for: 0s
+            noDataState: OK
+            execErrState: Error
+            labels:
+              severity: critical
+            annotations:
+              summary: >-
+                PostgreSQL backup FAILED for {{ $labels.cnpg_cluster }} — the last
+                failed backup is newer than the last successful one. Recovery
+                point is not advancing.
+              runbook: docs/runbooks/backup-failure.md
+            data:
+              - refId: A
+                relativeTimeRange: {from: 600, to: 0}
+                datasourceUid: prometheus
+                model:
+                  datasource: {type: prometheus, uid: prometheus}
+                  editorMode: code
+                  expr: cnpg_collector_last_failed_backup_timestamp > cnpg_collector_last_available_backup_timestamp
+                  instant: true
+                  range: false
+                  refId: A
+              - refId: C
+                datasourceUid: __expr__
+                model:
+                  datasource: {type: __expr__, uid: __expr__}
+                  type: threshold
+                  expression: A
+                  conditions:
+                    - evaluator: {type: gt, params: [0]}
+                      operator: {type: and}
+                      query: {params: [C]}
+                      reducer: {type: last}
+                      type: query
+                  refId: C
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: grafana
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: grafana
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: grafana
+        app.kubernetes.io/part-of: maagaparuga
+    spec:
+      containers:
+        - name: grafana
+          image: grafana/grafana:pinned
+          env:
+            - name: GF_SECURITY_ADMIN_USER
+              valueFrom:
+                secretKeyRef:
+                  name: grafana-admin
+                  key: username
+            - name: GF_SECURITY_ADMIN_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: grafana-admin
+                  key: password
+            # Dev only: no sign-up, alerting on (default in Grafana 11).
+            - name: GF_USERS_ALLOW_SIGN_UP
+              value: "false"
+          ports:
+            - name: http
+              containerPort: 3000
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              memory: 384Mi
+          readinessProbe:
+            httpGet:
+              path: /api/health
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /api/health
+              port: http
+            periodSeconds: 15
+            timeoutSeconds: 3
+            failureThreshold: 4
+          volumeMounts:
+            - name: datasources
+              mountPath: /etc/grafana/provisioning/datasources
+              readOnly: true
+            - name: alerting
+              mountPath: /etc/grafana/provisioning/alerting
+              readOnly: true
+      volumes:
+        - name: datasources
+          configMap:
+            name: grafana-datasources
+        - name: alerting
+          configMap:
+            name: grafana-alerting
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: grafana
+spec:
+  selector:
+    app.kubernetes.io/name: grafana
+  ports:
+    - name: http
+      port: 3000

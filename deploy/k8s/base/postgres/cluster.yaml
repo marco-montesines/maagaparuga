@@ -1,0 +1,89 @@
+# PostgreSQL via the CloudNativePG operator (ADR 0005).
+# One instance by default; the cluster overlay raises `instances` to 2
+# (primary + streaming replica with automated failover).
+#
+# CNPG auto-creates the `maagaparuga-pg-app` secret (user `app`, db `app`)
+# used by the application services. ZITADEL and OpenFGA get their own roles
+# and databases below; their passwords come from per-overlay secrets
+# (dev: generated literals, cloud: provisioned credentials).
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: maagaparuga-pg
+spec:
+  instances: 1
+  # Pinned here (not in kustomization images:) because this is a CR field,
+  # not a pod template. ADR 0013: exact pin, auto-refreshed.
+  imageName: ghcr.io/cloudnative-pg/postgresql:18.4
+  storage:
+    size: 2Gi
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      memory: 512Mi
+  bootstrap:
+    initdb:
+      database: app
+      owner: app
+  # Continuous backup: WAL archiving + base backups to S3-compatible storage
+  # (dev: the in-cluster SeaweedFS). This gives point-in-time recovery — a base
+  # backup plus every WAL segment since. The dev target shares the node, so it
+  # demonstrates the MECHANISM, not disaster recovery; cloud overlays
+  # repoint destinationPath/endpointURL at durable, off-node object storage.
+  # (In-tree barman is deprecated upstream in favour of the barman-cloud
+  # plugin; kept here because it needs no extra operator install for dev.)
+  backup:
+    retentionPolicy: "7d"
+    barmanObjectStore:
+      destinationPath: s3://pg-backups/
+      endpointURL: http://seaweedfs:8333
+      s3Credentials:
+        accessKeyId:
+          name: pg-backup-s3
+          key: ACCESS_KEY_ID
+        secretAccessKey:
+          name: pg-backup-s3
+          key: ACCESS_SECRET_KEY
+      wal:
+        compression: gzip
+      data:
+        compression: gzip
+  managed:
+    roles:
+      - name: zitadel
+        ensure: present
+        login: true
+        createdb: true   # ZITADEL's init phase creates + owns its database itself
+        passwordSecret:
+          name: pg-zitadel-credentials
+      - name: openfga
+        ensure: present
+        login: true
+        passwordSecret:
+          name: pg-openfga-credentials
+---
+apiVersion: postgresql.cnpg.io/v1
+kind: Database
+metadata:
+  name: maagaparuga-pg-openfga
+spec:
+  name: openfga
+  owner: openfga
+  cluster:
+    name: maagaparuga-pg
+---
+# Daily base backup (6-field cron: sec min hour dom mon dow → 03:00 UTC).
+# WAL archives continuously between base backups (see the Cluster above), so
+# recovery is base + WAL, not just the nightly snapshot. retentionPolicy on the
+# Cluster expires both together.
+apiVersion: postgresql.cnpg.io/v1
+kind: ScheduledBackup
+metadata:
+  name: maagaparuga-pg-daily
+spec:
+  schedule: "0 0 3 * * *"
+  backupOwnerReference: self
+  cluster:
+    name: maagaparuga-pg

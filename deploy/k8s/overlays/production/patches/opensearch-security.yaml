@@ -1,0 +1,19 @@
+# HARDENING TODO (top item): enable the OpenSearch security plugin (TLS + auth)
+# in production. That is deferred because it must be wired across every client
+# (PHP/Go/Python + Grafana) with self-signed-cert trust, and needs a live cluster
+# to validate. Until then OpenSearch runs security-off — reachable ONLY in-cluster
+# (ClusterIP, private network; the Hetzner firewall blocks 9200 at the edge).
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: opensearch
+spec:
+  template:
+    spec:
+      containers:
+        - name: opensearch
+          env:
+            - name: DISABLE_SECURITY_PLUGIN
+              value: "true"
+            - name: DISABLE_INSTALL_DEMO_CONFIG
+              value: "true"

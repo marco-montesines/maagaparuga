@@ -1,0 +1,20 @@
+# Postgres HA: 3 instances (primary + 2 streaming replicas), spread across the 3
+# nodes by anti-affinity. Continuous backup goes OFFSITE to a Backblaze B2
+# Object-Lock (WORM) bucket — the pg-backup-s3 secret carries the B2 key at
+# deploy time (never committed). This is the one store where "3 nodes" is a safe,
+# native config change (CNPG manages replication + failover).
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: maagaparuga-pg
+spec:
+  instances: 3
+  affinity:
+    enablePodAntiAffinity: true
+    topologyKey: kubernetes.io/hostname
+  storage:
+    size: 10Gi
+  backup:
+    barmanObjectStore:
+      destinationPath: s3://bgg-iac-pg-backups/
+      endpointURL: https://s3.eu-central-003.backblazeb2.com

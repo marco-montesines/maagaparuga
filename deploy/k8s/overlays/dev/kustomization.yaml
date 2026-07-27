@@ -1,0 +1,170 @@
+# Dev overlay — minikube (`make dev`).
+#
+# DEV-ONLY CREDENTIALS: the generated secrets below are well-known local
+# values for a throwaway minikube cluster. They are NOT secrets and are NEVER
+# used in staging/production — cloud overlays get real secret provisioning.
+# This is mock infrastructure for a research/educational platform.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: maagaparuga   # must be repeated here so GENERATED secrets land in it too
+
+resources:
+  - ../../base
+
+secretGenerator:
+  - name: pg-zitadel-credentials
+    type: kubernetes.io/basic-auth
+    literals:
+      - username=zitadel
+      - password=dev-zitadel-pw
+  - name: pg-openfga-credentials
+    type: kubernetes.io/basic-auth
+    literals:
+      - username=openfga
+      - password=dev-openfga-pw
+  - name: openfga-datastore
+    literals:
+      - uri=postgres://openfga:dev-openfga-pw@maagaparuga-pg-rw:5432/openfga?sslmode=disable
+  - name: clickhouse-credentials
+    literals:
+      - username=maagaparuga
+      - password=dev-clickhouse-pw
+  - name: opensearch-credentials
+    literals:
+      # The image requires a strong-looking initial admin password even when
+      # the security plugin is disabled for dev (see patch below).
+      - admin-password=Dev-Opensearch-Pw1!
+  - name: redis-credentials
+    literals:
+      - password=dev-redis-pw
+  # Media service S3 identity — matches the `dev` identity in
+  # seaweedfs-s3-config.json. Dev-only well-known creds; cloud overlays provision real ones.
+  - name: media-s3
+    literals:
+      - S3_ACCESS_KEY=dev-maagaparuga
+      - S3_SECRET_KEY=dev-seaweedfs-secret
+  - name: seaweedfs-s3-config
+    files:
+      - s3-config.json=seaweedfs-s3-config.json
+  - name: zitadel-masterkey
+    literals:
+      # ZITADEL requires exactly 32 bytes.
+      - masterkey=DevOnlyMasterkeyDevOnlyMasterkey
+  - name: web-secrets
+    literals:
+      # Laravel APP_KEY: base64 of 32 bytes — dev-only, well-known.
+      - APP_KEY=base64:ZGV2LWtleS1kZXYta2V5LWRldi1rZXktZGV2LWtleS0=
+      # Set after `php artisan fga:bootstrap` (empty = authz fails closed).
+      - OPENFGA_STORE_ID=
+      - OPENFGA_MODEL_ID=
+      # Set after the ZITADEL client is registered (web-service follow-up).
+      - ZITADEL_CLIENT_ID=
+      - ZITADEL_CLIENT_SECRET=
+      - ZITADEL_REDIRECT_URI=http://maagaparuga.test:9080/auth/callback
+  # Device (M2M) credentials the simulator presents as an IoMT device. Empty
+  # until `make dev-device-auth` injects the values the bootstrap emitted —
+  # never committed, exactly like the web client secret.
+  - name: telemetry-secrets
+    literals:
+      - DEVICE_CLIENT_ID=
+      - DEVICE_CLIENT_SECRET=
+  # S3 credentials CNPG uses to archive Postgres to the in-cluster SeaweedFS.
+  # Dev-only well-known creds matching seaweedfs-s3-config.json (the `dev`
+  # identity); cloud overlays provide real, provisioned credentials.
+  - name: pg-backup-s3
+    literals:
+      - ACCESS_KEY_ID=dev-maagaparuga
+      - ACCESS_SECRET_KEY=dev-seaweedfs-secret
+  # Grafana admin login (dev-only, well-known). Cloud overlays provision a real
+  # password.
+  - name: grafana-admin
+    literals:
+      - username=admin
+      - password=dev-grafana-admin
+
+generatorOptions:
+  disableNameSuffixHash: true   # stable names so base manifests can reference them
+
+# Dev-only: device auth is off until the ZITADEL client + device service
+# account are bootstrapped (web + telemetry follow-up). The telemetry service prints a
+# warning on every start while this is set, so it cannot pass unnoticed.
+configMapGenerator:
+  - name: web-config
+    behavior: merge
+    literals:
+      # Single-host OIDC issuer: the browser reaches it via /etc/hosts +
+      # the gateway port-forward, in-cluster services reach it via CoreDNS
+      # (both resolve maagaparuga.test -> the APISIX gateway). See `make
+      # dev-dns` and the /etc/hosts note in deploy/k8s/README.md.
+      - ZITADEL_BASE_URL=http://maagaparuga.test:9080
+  - name: telemetry-config
+    behavior: merge
+    literals:
+      # Default off so `make dev` brings up a working stack with no identity
+      # wiring; `make dev-device-auth` flips this to jwt and fills the audience
+      # + store below (same opt-in pattern as browser login needing
+      # dev-bootstrap). The service warns loudly on every start while disabled.
+      - AUTH_MODE=disabled
+      - OPENFGA_STORE_ID=
+      - OPENFGA_MODEL_ID=
+      # Token issuer (matches the single-host issuer) + audience. The audience
+      # is the MaagapAruga project id ZITADEL puts in a device token's `aud`;
+      # dev-device-auth sets it from the bootstrap output.
+      - OIDC_ISSUER=http://maagaparuga.test:9080
+      - OIDC_AUDIENCE=
+
+patches:
+  # Single-host issuer for dev browser login: ZITADEL's external domain is the
+  # shared host, its external port is the gateway's. Requires a fresh ZITADEL
+  # instance (external domain is fixed at init) — `make dev-reinit-zitadel`.
+  - patch: |-
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: zitadel
+      spec:
+        template:
+          spec:
+            containers:
+              - name: zitadel
+                env:
+                  - name: ZITADEL_EXTERNALDOMAIN
+                    value: maagaparuga.test
+                  - name: ZITADEL_EXTERNALPORT
+                    value: "9080"
+  # Bootstrap registers the browser-facing redirect + post-logout URIs.
+  - patch: |-
+      apiVersion: batch/v1
+      kind: Job
+      metadata:
+        name: zitadel-bootstrap
+      spec:
+        template:
+          spec:
+            containers:
+              - name: bootstrap
+                env:
+                  - name: WEB_REDIRECT_URI
+                    value: http://maagaparuga.test:9080/auth/callback
+                  - name: WEB_POST_LOGOUT_URI
+                    value: http://maagaparuga.test:9080/
+  # Dev/demo: bootstrap also seeds the fictitious login users (default off).
+  - target:
+      kind: Job
+      name: zitadel-bootstrap
+    patch: |-
+      - op: add
+        path: /spec/template/spec/containers/0/args/-
+        value: -seed-mock-users
+  # (All app services now have images and run at replicas 1: web + web-queue,
+  # telemetry + telemetry-writer, assessment, media + media-worker. The
+  # apps-scale-zero patch is retired — nothing left to hold at 0.)
+  # Dev runs OpenSearch with the security plugin disabled (no TLS/auth noise
+  # locally); cloud overlays enable security with real credentials.
+  - path: patches/opensearch-dev.yaml
+  # Expose the gateway and a few consoles on stable NodePorts for the host.
+  - path: patches/nodeports.yaml
+    target:
+      kind: Service
+      name: apisix

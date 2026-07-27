@@ -1,0 +1,161 @@
+# ZITADEL — OIDC identity provider (ADR 0009). State lives in PostgreSQL
+# (role/database managed by the CNPG cluster manifest).
+# Dev runs without TLS behind APISIX; cloud overlays set the external domain
+# and secure mode.
+#
+# On first-instance init ZITADEL creates an admin **machine (service) user**
+# and writes its JSON key to /machinekey (a shared PVC). The bootstrap Job
+# reads that key to configure the project, OIDC app, roles, and mock users
+# through the Management API — the documented, reproducible ZITADEL pattern
+# (the image is distroless, so there is no interactive/console step).
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: zitadel-machinekey
+spec:
+  accessModes: ["ReadWriteOnce"]
+  resources:
+    requests:
+      storage: 64Mi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: zitadel
+spec:
+  replicas: 1
+  strategy:
+    # The machine-key PVC is RWO; a rolling update would try to mount it into
+    # two pods at once. Recreate avoids that (single-replica identity service).
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: zitadel
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: zitadel
+        app.kubernetes.io/part-of: maagaparuga
+    spec:
+      # Kubernetes service links would inject ZITADEL_PORT=tcp://... (docker-style
+      # env for the Service of the same name), which ZITADEL's env-prefixed config
+      # parses as its Port setting and crashes on. Same-namespace discovery is DNS.
+      enableServiceLinks: false
+      containers:
+        - name: zitadel
+          image: ghcr.io/zitadel/zitadel:pinned
+          # The zitadel role is CNPG-managed WITH createdb, and ZITADEL's init
+          # phase creates and owns its database + eventstore schema itself
+          # (admin connection = the same role, so user creation is skipped).
+          args:
+            - start-from-init
+            - --masterkeyFromEnv
+            # dev: plain HTTP, no external TLS terminator assumed, so the
+            # issuer is http://<externalDomain>:<externalPort>. Cloud overlays
+            # set --tlsMode external behind the gateway's TLS.
+            - --tlsMode
+            - disabled
+          env:
+            - name: ZITADEL_MASTERKEY
+              valueFrom:
+                secretKeyRef:
+                  name: zitadel-masterkey
+                  key: masterkey
+            - name: ZITADEL_DATABASE_POSTGRES_HOST
+              value: maagaparuga-pg-rw
+            - name: ZITADEL_DATABASE_POSTGRES_PORT
+              value: "5432"
+            - name: ZITADEL_DATABASE_POSTGRES_DATABASE
+              value: zitadel
+            - name: ZITADEL_DATABASE_POSTGRES_USER_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: pg-zitadel-credentials
+                  key: username
+            - name: ZITADEL_DATABASE_POSTGRES_USER_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: pg-zitadel-credentials
+                  key: password
+            - name: ZITADEL_DATABASE_POSTGRES_USER_SSL_MODE
+              value: disable
+            - name: ZITADEL_DATABASE_POSTGRES_ADMIN_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: pg-zitadel-credentials
+                  key: username
+            - name: ZITADEL_DATABASE_POSTGRES_ADMIN_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: pg-zitadel-credentials
+                  key: password
+            - name: ZITADEL_DATABASE_POSTGRES_ADMIN_SSL_MODE
+              value: disable
+            - name: ZITADEL_EXTERNALDOMAIN
+              value: zitadel
+            - name: ZITADEL_EXTERNALPORT
+              value: "8080"
+            - name: ZITADEL_EXTERNALSECURE
+              value: "false"
+            # First-instance org + an admin machine user whose JSON key is
+            # written to the shared PVC for the bootstrap Job to consume.
+            - name: ZITADEL_FIRSTINSTANCE_ORG_NAME
+              value: MaagapAruga
+            - name: ZITADEL_FIRSTINSTANCE_ORG_MACHINE_MACHINE_USERNAME
+              value: bootstrap
+            - name: ZITADEL_FIRSTINSTANCE_ORG_MACHINE_MACHINE_NAME
+              value: bootstrap
+            - name: ZITADEL_FIRSTINSTANCE_ORG_MACHINE_MACHINEKEY_TYPE
+              value: "1" # JSON key
+            - name: ZITADEL_FIRSTINSTANCE_MACHINEKEYPATH
+              value: /machinekey/admin-sa.json
+          ports:
+            - name: http
+              containerPort: 8080
+          resources:
+            requests:
+              cpu: 100m
+              memory: 384Mi
+            limits:
+              memory: 768Mi
+          # First-instance init runs DB migrations + eventstore setup, which is
+          # slow; startup gates liveness (up to ~5m) so init is never killed.
+          startupProbe:
+            httpGet:
+              path: /debug/healthz
+              port: http
+            periodSeconds: 10
+            failureThreshold: 30
+          readinessProbe:
+            httpGet:
+              path: /debug/ready
+              port: http
+            initialDelaySeconds: 20
+            periodSeconds: 10
+          # Liveness uses /debug/healthz (process alive), weaker than the
+          # /debug/ready readiness (dependencies reachable).
+          livenessProbe:
+            httpGet:
+              path: /debug/healthz
+              port: http
+            periodSeconds: 15
+            timeoutSeconds: 3
+            failureThreshold: 4
+          volumeMounts:
+            - name: machinekey
+              mountPath: /machinekey
+      volumes:
+        - name: machinekey
+          persistentVolumeClaim:
+            claimName: zitadel-machinekey
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: zitadel
+spec:
+  selector:
+    app.kubernetes.io/name: zitadel
+  ports:
+    - name: http
+      port: 8080

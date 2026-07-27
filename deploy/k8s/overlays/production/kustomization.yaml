@@ -1,0 +1,41 @@
+# Production overlay — the always-on 3-node cluster.
+#
+# What this overlay changes vs base/dev:
+#   - Postgres runs HA (CNPG 3 instances + anti-affinity), backing up OFFSITE to
+#     Backblaze B2 (immutable/WORM bucket).
+#   - Device + media auth ENFORCED (AUTH_MODE=jwt) against the production issuer.
+#   - Caddy is the public TLS edge (real Let's Encrypt cert for the DuckDNS
+#     hostname, auto-renewed) -> reverse-proxies to APISIX (which stays internal).
+#
+# SECRETS ARE NOT COMMITTED. Provision them at deploy time (real DB / OpenSearch /
+# ZITADEL creds, seaweedfs-s3-config, and the B2/DO backup keys as pg-backup-s3) —
+# gitignored files or SealedSecrets. `kubectl kustomize` builds without them; the
+# pods just won't start until the Secrets exist. See secrets/README.md.
+#
+# STAGED (documented, not yet done — need a live cluster to validate):
+#   - true multi-node clustering for OpenSearch / ClickHouse / NATS / SeaweedFS
+#     (each needs discovery/keeper/routes config; single-node for now).
+#   - OpenSearch security plugin ON (needs https+auth wired across every client).
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: maagaparuga
+
+resources:
+  - ../../base
+  - caddy.yaml # the public TLS edge (Let's Encrypt via DuckDNS)
+  - pull-secret-sa.yaml # default SA carries the GHCR ghcr-pull imagePullSecret
+
+patches:
+  - path: patches/postgres-ha.yaml
+  - path: patches/opensearch-security.yaml
+  - path: patches/zitadel-issuer.yaml
+  - path: patches/auth-and-issuer.yaml
+
+# In base the bootstrap image is UNQUALIFIED (maagaparuga-zitadel-bootstrap:dev)
+# because dev builds it straight into minikube's Docker daemon. In the cloud, k3s
+# pulls it from GHCR like the other four app images, so give it the full name.
+images:
+  - name: maagaparuga-zitadel-bootstrap
+    newName: ghcr.io/marco-montesines/maagaparuga-zitadel-bootstrap
+    newTag: dev

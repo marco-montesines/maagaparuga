@@ -1,0 +1,20 @@
+# Single-host OIDC issuer for production: ZITADEL's external domain is the real
+# DuckDNS hostname, served over HTTPS (Caddy terminates TLS on :443 with a real
+# Let's Encrypt cert). EXTERNALSECURE=true + port 443. The external domain is
+# fixed at ZITADEL init, so this must be a fresh instance.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: zitadel
+spec:
+  template:
+    spec:
+      containers:
+        - name: zitadel
+          env:
+            - name: ZITADEL_EXTERNALDOMAIN
+              value: maagaparuga.duckdns.org
+            - name: ZITADEL_EXTERNALPORT
+              value: "443"
+            - name: ZITADEL_EXTERNALSECURE
+              value: "true"

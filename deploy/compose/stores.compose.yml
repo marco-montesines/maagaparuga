@@ -1,0 +1,78 @@
+# Data stores only — optional fast path while iterating on a single service
+# (`make stores-up`). The real dev environment is Kubernetes: `make dev`.
+# DEV-ONLY credentials; never used outside a local machine.
+name: maagaparuga-stores
+
+services:
+  postgres:
+    image: postgres:18.4
+    environment:
+      POSTGRES_DB: app
+      POSTGRES_USER: app
+      POSTGRES_PASSWORD: dev-postgres-pw
+    ports:
+      - "5432:5432"
+    volumes:
+      - pg-data:/var/lib/postgresql/data
+
+  clickhouse:
+    image: clickhouse/clickhouse-server:26.6.1.1193
+    environment:
+      CLICKHOUSE_DB: maagaparuga
+      CLICKHOUSE_USER: maagaparuga
+      CLICKHOUSE_PASSWORD: dev-clickhouse-pw
+    ports:
+      - "8123:8123"
+      - "9000:9000"
+    volumes:
+      - ch-data:/var/lib/clickhouse
+
+  opensearch:
+    image: opensearchproject/opensearch:3.7.0
+    environment:
+      discovery.type: single-node
+      DISABLE_SECURITY_PLUGIN: "true"
+      DISABLE_INSTALL_DEMO_CONFIG: "true"
+      OPENSEARCH_JAVA_OPTS: "-Xms512m -Xmx512m"
+      OPENSEARCH_INITIAL_ADMIN_PASSWORD: "Dev-Opensearch-Pw1!"
+    ports:
+      - "9200:9200"
+    volumes:
+      - os-data:/usr/share/opensearch/data
+
+  redis:
+    image: redis:8.8.0-alpine
+    command: ["redis-server", "--requirepass", "dev-redis-pw"]
+    ports:
+      - "6379:6379"
+
+  seaweedfs:
+    image: chrislusf/seaweedfs:4.40
+    command:
+      - server
+      - -dir=/data
+      - -s3
+      - -s3.port=8333
+      - -s3.config=/etc/seaweedfs/s3-config.json
+    ports:
+      - "8333:8333"   # S3 API
+      - "9333:9333"   # master UI/status
+    volumes:
+      - seaweedfs-data:/data
+      - ./seaweedfs-s3-config.json:/etc/seaweedfs/s3-config.json:ro
+
+  nats:
+    image: nats:2.14.3-alpine
+    command: ["--jetstream", "--store_dir=/data", "--http_port=8222"]
+    ports:
+      - "4222:4222"
+      - "8222:8222"
+    volumes:
+      - nats-data:/data
+
+volumes:
+  pg-data:
+  ch-data:
+  os-data:
+  seaweedfs-data:
+  nats-data:
