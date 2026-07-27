@@ -1,0 +1,17 @@
+# Keep secrets, VCS metadata, and local caches out of the build context/image.
+# The Dockerfile only COPYs pyproject.toml + src/, so this is defense-in-depth
+# against a stray file ever being swept in.
+.git
+.gitignore
+.env
+.env.*
+*.pem
+*.key
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+.coverage
