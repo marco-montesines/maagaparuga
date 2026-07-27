@@ -1,12 +1,12 @@
 # Automated dependency + action-version updates across every ecosystem in the
-# monorepo. Weekly, grouped to keep PR noise low. GitHub Actions updates also
-# serve the hibp SHA-pinning convention — Dependabot pins/refreshes action refs.
+# monorepo. Monthly, grouped to keep PR noise low. GitHub Actions updates also
+# keep the action refs current.
 version: 2
 updates:
   - package-ecosystem: github-actions
     directory: /
     schedule:
-      interval: weekly
+      interval: monthly
     groups:
       actions:
         patterns: ["*"]
@@ -14,7 +14,7 @@ updates:
   - package-ecosystem: composer
     directory: /apps/web
     schedule:
-      interval: weekly
+      interval: monthly
     groups:
       php:
         patterns: ["*"]
@@ -22,7 +22,7 @@ updates:
   - package-ecosystem: npm
     directory: /apps/web
     schedule:
-      interval: weekly
+      interval: monthly
     groups:
       js:
         patterns: ["*"]
@@ -30,7 +30,7 @@ updates:
   - package-ecosystem: gomod
     directory: /services/telemetry
     schedule:
-      interval: weekly
+      interval: monthly
     groups:
       go:
         patterns: ["*"]
@@ -38,7 +38,7 @@ updates:
   - package-ecosystem: pip
     directory: /services/assessment
     schedule:
-      interval: weekly
+      interval: monthly
     groups:
       python-assessment:
         patterns: ["*"]
@@ -46,7 +46,7 @@ updates:
   - package-ecosystem: pip
     directory: /services/media
     schedule:
-      interval: weekly
+      interval: monthly
     groups:
       python-media:
         patterns: ["*"]
@@ -59,7 +59,7 @@ updates:
       - /services/media
       - /tools/zitadel-bootstrap
     schedule:
-      interval: weekly
+      interval: monthly
     groups:
       base-images:
         patterns: ["*"]
@@ -67,7 +67,7 @@ updates:
   - package-ecosystem: terraform
     directory: /infra
     schedule:
-      interval: weekly
+      interval: monthly
     groups:
       terraform:
         patterns: ["*"]
