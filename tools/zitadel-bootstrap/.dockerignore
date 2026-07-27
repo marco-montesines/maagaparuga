@@ -1,0 +1,9 @@
+# The Dockerfile does `COPY . .` into the build stage, so exclude secrets + VCS
+# metadata as defense-in-depth (the final image is distroless + the compiled
+# binary only, but this keeps anything sensitive out of the build context too).
+.git
+.gitignore
+.env
+.env.*
+*.pem
+*.key
