@@ -109,14 +109,15 @@ jobs:
       - name: composer audit
         run: composer audit --abandoned=report
 
-  dependency-review:
-    name: Dependency review
-    if: github.event_name == 'pull_request'
-    runs-on: ubuntu-latest
-    # Dependency review needs the Dependency Graph + GitHub Advanced Security,
-    # which are free once the repo is PUBLIC but unavailable on a private repo —
-    # so keep it non-blocking for now. It activates automatically at the flip.
-    continue-on-error: true
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/dependency-review-action@v4
+# Dependency review needs the Dependency Graph + GitHub Advanced Security, which
+# are free once the repo is PUBLIC but unavailable on a private repo (the action
+# hard-fails, and job-level continue-on-error still surfaces a red check). Re-add
+# this job at the public flip:
+#
+#   dependency-review:
+#     name: Dependency review
+#     if: github.event_name == 'pull_request'
+#     runs-on: ubuntu-latest
+#     steps:
+#       - uses: actions/checkout@v4
+#       - uses: actions/dependency-review-action@v4

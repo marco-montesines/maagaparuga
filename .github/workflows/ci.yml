@@ -170,8 +170,11 @@ jobs:
       # and works on any event.
       - name: Install gitleaks
         run: |
-          VERSION=8.24.3
+          VERSION=8.30.1
           curl -sSfL "https://github.com/gitleaks/gitleaks/releases/download/v${VERSION}/gitleaks_${VERSION}_linux_x64.tar.gz" \
             | sudo tar -xz -C /usr/local/bin gitleaks
+      # Pass the config explicitly — older gitleaks builds don't honor the
+      # [[allowlists]] array syntax that .gitleaks.toml uses for the verified
+      # false positives, and would otherwise re-flag them.
       - name: gitleaks detect
-        run: gitleaks detect --source . --redact --no-banner
+        run: gitleaks detect --source . --config .gitleaks.toml --redact --no-banner
