@@ -8,7 +8,11 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
-/** Written by the assessment service (NEWS2, DASS21 subscales, fuzzy risk). */
+/**
+ * Written by the assessment service (NEWS2, DASS21 subscales, fuzzy risk).
+ *
+ * @property RiskLevel $risk_level
+ */
 class AssessmentResult extends Model
 {
     /** @use HasFactory<AssessmentResultFactory> */

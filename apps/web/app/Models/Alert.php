@@ -11,6 +11,8 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 /**
  * The alerts inbox — "detect early, assess continuously, refer promptly".
  * Created when an assessment result crosses the risk threshold.
+ *
+ * @property RiskLevel $severity
  */
 class Alert extends Model
 {
