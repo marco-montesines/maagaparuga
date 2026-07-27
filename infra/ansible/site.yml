@@ -1,0 +1,32 @@
+# Provision the cluster: harden every node, install k3s (server then agents),
+# then deploy the app overlay. Run after `terragrunt apply` + inventory export:
+#
+#   cd infra/ansible
+#   ansible-playbook site.yml -e env=production
+#
+---
+- name: Base hardening (all nodes)
+  hosts: all
+  become: true
+  roles:
+    - common
+
+- name: K3s control plane (server node)
+  hosts: k3s_server
+  become: true
+  roles:
+    - role: k3s
+      k3s_role: server
+
+- name: K3s workers (agent nodes)
+  hosts: k3s_agents
+  become: true
+  roles:
+    - role: k3s
+      k3s_role: agent
+
+- name: Deploy the application overlay
+  hosts: k3s_server
+  become: true
+  roles:
+    - deploy

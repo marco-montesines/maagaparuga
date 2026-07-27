@@ -1,0 +1,20 @@
+#cloud-config
+# First-boot: move sshd onto the non-default port. On Ubuntu 24.04 the ssh.socket
+# ListenStream is AUTO-GENERATED from sshd_config's Port by a systemd generator
+# (visible on a running host as Drop-In /run/systemd/generator/ssh.socket.d/
+# addresses.conf). So we ONLY set Port in sshd_config, then daemon-reload (re-runs
+# the generator -> socket picks up the port) and restart ssh.socket. Do NOT
+# hand-write an ssh.socket override — it fights the generated addresses.conf.
+# ForceNew user_data -> editing this rebuilds the nodes.
+package_update: true
+packages:
+  - python3   # Ansible needs a Python interpreter on the target
+
+write_files:
+  - path: /etc/ssh/sshd_config.d/10-maagaparuga-port.conf
+    content: |
+      Port ${ssh_port}
+
+runcmd:
+  - systemctl daemon-reload
+  - systemctl restart ssh.socket

@@ -1,0 +1,6 @@
+# Ansible collections the roles depend on. Install before running the playbook
+# or ansible-lint:  ansible-galaxy collection install -r requirements.yml
+---
+collections:
+  - name: ansible.posix # sysctl (vm.max_map_count), etc.
+  - name: community.general # general-purpose modules used across roles

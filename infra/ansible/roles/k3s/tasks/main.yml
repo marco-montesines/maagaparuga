@@ -1,0 +1,68 @@
+# Install k3s bound to the PRIVATE interface: the API is advertised on the
+# private net, flannel routes pod traffic over it, and agents join on the private
+# IP. The public interface carries only APISIX (80/443) + admin SSH.
+---
+- name: Find the private network interface (the NIC holding private_ip)
+  ansible.builtin.set_fact:
+    k3s_priv_iface: >-
+      {{ ansible_facts.interfaces
+         | map('extract', ansible_facts)
+         | selectattr('ipv4', 'defined')
+         | selectattr('ipv4.address', 'equalto', private_ip)
+         | map(attribute='device') | first }}
+
+- name: Check whether k3s is already installed
+  ansible.builtin.stat:
+    path: /usr/local/bin/k3s
+  register: k3s_bin
+
+# --- Control-plane node --------------------------------------------------
+- name: Install k3s server (control plane)  # noqa: command-instead-of-module
+  when: k3s_role == 'server' and not k3s_bin.stat.exists
+  ansible.builtin.shell:
+    cmd: >
+      set -o pipefail;
+      curl -sfL https://get.k3s.io |
+      INSTALL_K3S_CHANNEL={{ k3s_channel }}
+      {% if k3s_version %}INSTALL_K3S_VERSION={{ k3s_version }}{% endif %}
+      sh -s - server
+      --node-ip {{ private_ip }}
+      --node-external-ip {{ ansible_host }}
+      --advertise-address {{ private_ip }}
+      --flannel-iface {{ k3s_priv_iface }}
+      --tls-san {{ ansible_host }}
+      {{ k3s_server_extra_args }}
+  args:
+    creates: /usr/local/bin/k3s
+    executable: /bin/bash
+
+- name: Read the k3s node-token (to join agents)
+  when: k3s_role == 'server'
+  ansible.builtin.slurp:
+    src: /var/lib/rancher/k3s/server/node-token
+  register: k3s_token_raw
+
+- name: Publish the node-token as a host fact
+  when: k3s_role == 'server'
+  ansible.builtin.set_fact:
+    k3s_node_token: "{{ k3s_token_raw.content | b64decode | trim }}"
+
+# --- Worker nodes --------------------------------------------------------
+- name: Install k3s agent (worker)  # noqa: command-instead-of-module
+  when: k3s_role == 'agent' and not k3s_bin.stat.exists
+  ansible.builtin.shell:
+    cmd: >
+      set -o pipefail;
+      curl -sfL https://get.k3s.io |
+      INSTALL_K3S_CHANNEL={{ k3s_channel }}
+      {% if k3s_version %}INSTALL_K3S_VERSION={{ k3s_version }}{% endif %}
+      K3S_URL=https://{{ k3s_server_private_ip }}:6443
+      K3S_TOKEN={{ hostvars[groups['k3s_server'][0]]['k3s_node_token'] }}
+      sh -s - agent
+      --node-ip {{ private_ip }}
+      --node-external-ip {{ ansible_host }}
+      --flannel-iface {{ k3s_priv_iface }}
+      {{ k3s_agent_extra_args }}
+  args:
+    creates: /usr/local/bin/k3s
+    executable: /bin/bash

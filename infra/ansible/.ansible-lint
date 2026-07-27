@@ -1,0 +1,6 @@
+# ansible-lint runs the strictest `production` profile: role-scoped variable
+# names, uppercase task names, templates only at the end of names, FQCN modules,
+# no risky shell pipes, etc. The roles are written to satisfy it (the only
+# exception is the official k3s installer, which is a `curl | sh` script — those
+# two tasks carry a justified `# noqa: command-instead-of-module`).
+profile: production
