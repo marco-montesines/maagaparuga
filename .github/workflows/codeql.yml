@@ -1,17 +1,16 @@
 # CodeQL static analysis for the compiled/interpreted languages GitHub supports
 # (Go + Python). PHP is covered by Semgrep in security.yml (CodeQL has no PHP).
 #
-# Results upload to the repository's Security tab (code scanning), which is FREE
-# once the repository is PUBLIC. On a private repo the upload needs GitHub
-# Advanced Security and otherwise fails ("Code scanning is not enabled"), so for
-# now this runs on manual dispatch only. Once the repository is public, add the automatic
-# triggers below to gate every push and PR:
-#     push: { branches: [master] }
-#     pull_request:
-#     schedule: [{ cron: "0 6 * * 1" }]
+# Results upload to the repository's Security tab (code scanning), gating every
+# push and PR plus a weekly scheduled scan.
 name: codeql
 
 on:
+  push:
+    branches: [master]
+  pull_request:
+  schedule:
+    - cron: "0 6 * * 1" # weekly, Monday 06:00 UTC
   workflow_dispatch:
 
 permissions:

@@ -47,15 +47,13 @@ jobs:
           path: _site
 
   deploy:
-    if: github.event_name != 'pull_request'
+    # Only publish once GitHub Pages is enabled: Settings -> Pages -> Source
+    # "GitHub Actions", then add repository variable PAGES_ENABLED = true. Until
+    # then the strict build above is the gate and NO failing Pages deployment is
+    # created (avoids a wall of red on the Deployments page while private).
+    if: github.event_name != 'pull_request' && vars.PAGES_ENABLED == 'true'
     needs: build
     runs-on: ubuntu-latest
-    # Non-blocking: publishing needs GitHub Pages enabled (Settings -> Pages ->
-    # Source: "GitHub Actions"; on a private repo that requires GitHub Pro).
-    # Until then this step no-ops with a warning instead of failing the run; the
-    # strict build above is the real gate. It publishes automatically once Pages
-    # is enabled.
-    continue-on-error: true
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
