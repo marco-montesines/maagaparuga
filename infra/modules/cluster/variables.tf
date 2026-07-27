@@ -10,7 +10,7 @@ variable "hcloud_token" {
 variable "project" {
   description = "Project identifier, used in Hetzner resource names + labels."
   type        = string
-  default     = "bgg-iac"
+  default     = "maagaparuga"
 }
 
 variable "environment" {

@@ -16,5 +16,5 @@ spec:
     size: 10Gi
   backup:
     barmanObjectStore:
-      destinationPath: s3://bgg-iac-pg-backups/
+      destinationPath: s3://maagaparuga-pg-backups/
       endpointURL: https://s3.eu-central-003.backblazeb2.com

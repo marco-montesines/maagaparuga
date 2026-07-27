@@ -1,8 +1,11 @@
-# HARDENING TODO (top item): enable the OpenSearch security plugin (TLS + auth)
-# in production. That is deferred because it must be wired across every client
-# (PHP/Go/Python + Grafana) with self-signed-cert trust, and needs a live cluster
-# to validate. Until then OpenSearch runs security-off — reachable ONLY in-cluster
-# (ClusterIP, private network; the Hetzner firewall blocks 9200 at the edge).
+# OpenSearch runs with its security plugin OFF by design. It is reachable ONLY
+# in-cluster (ClusterIP, private network; nothing routes to it from Caddy/APISIX
+# and the Hetzner firewall blocks 9200 at the edge), so access is governed by
+# network isolation, not by the plugin. Turning the plugin ON (in-cluster TLS +
+# per-client auth for PHP/Go/Python + Grafana, with self-signed-cert trust) is
+# optional defense-in-depth — deferred + documented, not a blocker, and needs a
+# live cluster to validate. A NetworkPolicy scoping who may reach :9200 is the
+# lighter-weight step if tighter isolation is wanted first.
 apiVersion: apps/v1
 kind: StatefulSet
 metadata:

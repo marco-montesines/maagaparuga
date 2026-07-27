@@ -5,9 +5,9 @@
 # (infra/ansible/roles/deploy): install the CNPG operator, create the GHCR pull
 # secret, `kubectl apply -k` the overlay, wait for rollouts, then smoke-test.
 #
-# Required (per-Environment) secrets — set under Settings → Environments:
+# Required (per-Environment) secret — set under Settings → Environments:
 #   KUBECONFIG_B64   base64 of a kubeconfig with access to that cluster
-#   GHCR_PULL_TOKEN  a read:packages PAT (while the images are private)
+# (App images are public on GHCR, so no image-pull secret is needed.)
 #
 # The `production` Environment should carry REQUIRED REVIEWERS — that is the
 # manual-approval gate (staging deploys freely; production waits for a review).
@@ -50,15 +50,6 @@ jobs:
           mkdir -p "$HOME/.kube"
           echo "${{ secrets.KUBECONFIG_B64 }}" | base64 -d > "$HOME/.kube/config"
           kubectl config current-context
-
-      - name: GHCR image-pull secret (private images)
-        run: |
-          kubectl create namespace maagaparuga --dry-run=client -o yaml | kubectl apply -f -
-          kubectl -n maagaparuga create secret docker-registry ghcr-pull \
-            --docker-server=ghcr.io \
-            --docker-username=marco-montesines \
-            --docker-password='${{ secrets.GHCR_PULL_TOKEN }}' \
-            --dry-run=client -o yaml | kubectl apply -f -
 
       - name: Install CloudNativePG operator
         run: |

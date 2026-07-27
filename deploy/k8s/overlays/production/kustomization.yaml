@@ -15,7 +15,11 @@
 # STAGED (documented, not yet done — need a live cluster to validate):
 #   - true multi-node clustering for OpenSearch / ClickHouse / NATS / SeaweedFS
 #     (each needs discovery/keeper/routes config; single-node for now).
-#   - OpenSearch security plugin ON (needs https+auth wired across every client).
+#
+# OpenSearch runs with its security plugin OFF by design: it is cluster-internal
+# only (ClusterIP, no edge route, firewall default-deny), so access is governed by
+# network isolation. Turning the plugin ON (in-cluster TLS + per-client auth) is
+# optional defense-in-depth — deferred + documented, see patches/opensearch-security.yaml.
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 
@@ -24,7 +28,6 @@ namespace: maagaparuga
 resources:
   - ../../base
   - caddy.yaml # the public TLS edge (Let's Encrypt via DuckDNS)
-  - pull-secret-sa.yaml # default SA carries the GHCR ghcr-pull imagePullSecret
 
 patches:
   - path: patches/postgres-ha.yaml
