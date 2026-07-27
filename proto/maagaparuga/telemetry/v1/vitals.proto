@@ -1,0 +1,96 @@
+syntax = "proto3";
+
+// Vitals/biotelemetry contract between (mock) IoMT devices and the telemetry
+// service (ADR 0010: gRPC where it earns its place — compact binary encoding
+// and client streaming suit high-frequency device telemetry; APISIX's
+// grpc-transcode exposes the same service as REST).
+//
+// DESIGN RULE — raw measurements only. Devices never send clinical scores.
+// The predecessor system accepted device-computed NEWS2/risk values and stored
+// them unvalidated; here every score is computed server-side by the assessment
+// service from these raw samples, so it can always be recomputed and audited.
+package maagaparuga.telemetry.v1;
+
+import "google/protobuf/timestamp.proto";
+
+option go_package = "maagaparuga/services/telemetry/gen/maagaparuga/telemetry/v1;telemetryv1";
+
+// Level of consciousness (AVPU scale) — a NEWS2 input, and the one vitals
+// field that is categorical rather than numeric.
+enum Consciousness {
+  CONSCIOUSNESS_UNSPECIFIED = 0;
+  CONSCIOUSNESS_ALERT = 1;
+  CONSCIOUSNESS_VOICE = 2;   // responds to voice
+  CONSCIOUSNESS_PAIN = 3;    // responds to pain
+  CONSCIOUSNESS_UNRESPONSIVE = 4;
+}
+
+// One point-in-time measurement set from one device.
+//
+// Every measurement is optional: real devices are single-purpose (a pulse
+// oximeter has no thermometer), so a sample carries only what that device
+// measured. Optional scalars distinguish "not measured" from "measured zero".
+message VitalsSample {
+  string device_id = 1;
+  string care_recipient_id = 2;
+  google.protobuf.Timestamp measured_at = 3;
+
+  optional uint32 heart_rate_bpm = 10;
+  optional uint32 respiratory_rate = 11;      // breaths per minute
+  optional double spo2_percent = 12;          // blood oxygen saturation
+  optional double body_temp_c = 13;
+  optional uint32 bp_systolic = 14;           // mmHg
+  optional uint32 bp_diastolic = 15;          // mmHg
+  Consciousness consciousness = 16;
+
+  // Sensors present in the predecessor research hardware; kept in the contract
+  // so the mock fleet can exercise them without a schema change.
+  optional double skin_resistance_ohms = 20;  // galvanic skin response
+  optional double skin_ph = 21;
+}
+
+// Each RPC gets its own request/response types so any one of them can gain
+// fields later without disturbing the others.
+
+message StreamVitalsRequest {
+  VitalsSample sample = 1;
+}
+
+message StreamVitalsResponse {
+  uint64 accepted = 1;
+  uint64 rejected = 2;
+}
+
+message PublishVitalsRequest {
+  VitalsSample sample = 1;
+}
+
+message PublishVitalsResponse {
+  uint64 accepted = 1;
+  uint64 rejected = 2;
+}
+
+message GetWindowRequest {
+  string care_recipient_id = 1;
+  google.protobuf.Timestamp from = 2;
+  google.protobuf.Timestamp to = 3;
+  uint32 limit = 4;   // 0 = server default
+}
+
+message GetWindowResponse {
+  repeated VitalsSample samples = 1;
+}
+
+service VitalsService {
+  // Device ingest: client-streaming so a fleet holds one connection and
+  // pushes continuously. The server validates and publishes to the broker,
+  // then returns counts — it never writes to the database on this path.
+  rpc StreamVitals(stream StreamVitalsRequest) returns (StreamVitalsResponse);
+
+  // Single-sample ingest — the shape REST clients get through the gateway's
+  // gRPC transcoding.
+  rpc PublishVitals(PublishVitalsRequest) returns (PublishVitalsResponse);
+
+  // Windowed read for the web BFF and the assessment service.
+  rpc GetWindow(GetWindowRequest) returns (GetWindowResponse);
+}
