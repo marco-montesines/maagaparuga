@@ -1,0 +1,52 @@
+/* MaagapAruga brand palette — the exact teal from the web app's welcome page
+   (Tailwind teal-500/600/700/800), applied over MkDocs Material's variables so
+   the docs site matches the product. */
+:root {
+  --md-primary-fg-color:        #0f766e; /* teal-700 */
+  --md-primary-fg-color--light: #14b8a6; /* teal-500 */
+  --md-primary-fg-color--dark:  #115e59; /* teal-800 */
+  --md-accent-fg-color:         #0d9488; /* teal-600 */
+  --md-typeset-a-color:         #0d9488;
+}
+
+/* Dark mode: lift the teal so it stays vivid on slate. */
+[data-md-color-scheme="slate"] {
+  --md-primary-fg-color:  #14b8a6;
+  --md-accent-fg-color:   #2dd4bf; /* teal-400 */
+  --md-typeset-a-color:   #2dd4bf;
+}
+
+/* Home hero */
+.mg-hero {
+  text-align: center;
+  padding: 2.5rem 1rem 1rem;
+}
+.mg-hero img {
+  width: 96px;
+  height: 96px;
+}
+.mg-hero h1 {
+  margin: 0.6rem 0 0.2rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+.mg-hero .mg-tagline {
+  color: var(--md-default-fg-color--light);
+  font-size: 1.05rem;
+  max-width: 42rem;
+  margin: 0 auto;
+}
+.mg-badge {
+  display: inline-block;
+  margin-top: 1rem;
+  padding: 0.35rem 0.8rem;
+  border-radius: 999px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #0f766e;
+  background: #ccfbf1; /* teal-100 */
+}
+[data-md-color-scheme="slate"] .mg-badge {
+  color: #99f6e4;
+  background: rgba(20, 184, 166, 0.15);
+}

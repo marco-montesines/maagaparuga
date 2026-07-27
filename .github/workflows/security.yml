@@ -1,0 +1,123 @@
+# Security scanning that works on the repository as it is today (no GitHub
+# Advanced Security required): SAST via Semgrep, vulnerability/secret/IaC scanning
+# via Trivy, and per-language dependency audits. CodeQL (Go + Python) lives in
+# codeql.yml; gitleaks + govulncheck run in ci.yml.
+name: security
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+  schedule:
+    - cron: "0 7 * * 1" # weekly, Monday 07:00 UTC — catches newly-disclosed CVEs
+
+permissions:
+  contents: read
+
+concurrency:
+  group: security-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  semgrep:
+    name: SAST — Semgrep
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install semgrep
+      # Curated high-signal rulesets across the repo's languages; fail only on
+      # ERROR-severity findings (triage lower ones without blocking).
+      - name: Semgrep scan
+        run: >
+          semgrep scan --error --severity ERROR
+          --config p/security-audit
+          --config p/secrets
+          --config p/php
+          --config p/python
+          --config p/golang
+          .
+
+  trivy:
+    name: Vulns, secrets, IaC — Trivy
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install Trivy
+        run: curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b /usr/local/bin
+      # Blocking: dependency vulnerabilities + committed secrets.
+      - name: Trivy — vulns + secrets (blocking)
+        run: trivy fs --scanners vuln,secret --severity HIGH,CRITICAL --exit-code 1 --ignore-unfixed --quiet .
+      # Report-only: IaC misconfig overlaps the tracked k8s-hardening backlog, so
+      # it surfaces findings for visibility without failing the build (yet).
+      - name: Trivy — IaC misconfig (report-only)
+        run: trivy config --severity HIGH,CRITICAL --exit-code 0 --quiet .
+
+  python-deps:
+    name: Python deps — pip-audit + bandit (${{ matrix.service }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        service: [assessment, media]
+    defaults:
+      run:
+        working-directory: services/${{ matrix.service }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+          cache: pip
+      - if: matrix.service == 'media'
+        name: CPU torch (media)
+        run: pip install --no-cache-dir torch --index-url https://download.pytorch.org/whl/cpu
+      - name: Install
+        # Upgrade pip + setuptools first: the runner's bundled setuptools carries
+        # known CVEs, and it's a build-time transitive, so remediate (upgrade)
+        # rather than suppress.
+        run: |
+          pip install -U pip setuptools
+          pip install -e '.[dev]' pip-audit bandit
+      - name: pip-audit
+        run: pip-audit
+      # Fail only on high-severity, high-confidence findings — the services
+      # legitimately use subprocess (FFmpeg) and bind 0.0.0.0 in-container, which
+      # bandit flags at low/medium.
+      - name: bandit
+        run: bandit -q -r src --severity-level high --confidence-level high
+
+  php-deps:
+    name: PHP deps — composer audit
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/web
+    steps:
+      - uses: actions/checkout@v7
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.4"
+          tools: composer:v2
+          coverage: none
+      - run: composer install --no-interaction --no-progress --prefer-dist
+      # Fail on real advisories only; abandoned packages are reported, not fatal
+      # (e.g. the OpenFGA PHP SDK is marked abandoned upstream but not vulnerable).
+      - name: composer audit
+        run: composer audit --abandoned=report
+
+# Dependency review needs the Dependency Graph + GitHub Advanced Security, which
+# are free once the repo is PUBLIC but unavailable on a private repo (the action
+# hard-fails, and job-level continue-on-error still surfaces a red check). Re-add
+# this job at the public flip:
+#
+#   dependency-review:
+#     name: Dependency review
+#     if: github.event_name == 'pull_request'
+#     runs-on: ubuntu-latest
+#     steps:
+#       - uses: actions/checkout@v7
+#       - uses: actions/dependency-review-action@v4

@@ -1,0 +1,79 @@
+# Deploy the app overlay to a cluster and smoke-test it.
+#
+# SCAFFOLD — authored ahead of a live environment; validate it end-to-end the
+# next time a cluster is stood up. It mirrors the Ansible deploy role
+# (infra/ansible/roles/deploy): install the CNPG operator, create the GHCR pull
+# secret, `kubectl apply -k` the overlay, wait for rollouts, then smoke-test.
+#
+# Required (per-Environment) secrets — set under Settings → Environments:
+#   KUBECONFIG_B64   base64 of a kubeconfig with access to that cluster
+#   GHCR_PULL_TOKEN  a read:packages PAT (while the images are private)
+#
+# The `production` Environment should carry REQUIRED REVIEWERS — that is the
+# manual-approval gate (staging deploys freely; production waits for a review).
+name: deploy
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Target environment
+        type: choice
+        options: [staging, production]
+        default: staging
+  # Auto-deploy staging on master once you're ready (kept off until a cluster
+  # + secrets exist):
+  # push:
+  #   branches: [master]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-${{ inputs.environment }}
+  cancel-in-progress: false
+
+env:
+  CNPG_VERSION: "1.30.0" # pinned <=1.30.x (in-tree barmanObjectStore); matches the Makefile
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    # Environment-scoped secrets + protection rules; `production` gets required
+    # reviewers = the manual-approval gate.
+    environment: ${{ inputs.environment }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure kubectl
+        run: |
+          mkdir -p "$HOME/.kube"
+          echo "${{ secrets.KUBECONFIG_B64 }}" | base64 -d > "$HOME/.kube/config"
+          kubectl config current-context
+
+      - name: GHCR image-pull secret (private images)
+        run: |
+          kubectl create namespace maagaparuga --dry-run=client -o yaml | kubectl apply -f -
+          kubectl -n maagaparuga create secret docker-registry ghcr-pull \
+            --docker-server=ghcr.io \
+            --docker-username=marco-montesines \
+            --docker-password='${{ secrets.GHCR_PULL_TOKEN }}' \
+            --dry-run=client -o yaml | kubectl apply -f -
+
+      - name: Install CloudNativePG operator
+        run: |
+          kubectl apply --server-side -f \
+            "https://github.com/cloudnative-pg/cloudnative-pg/releases/download/v${CNPG_VERSION}/cnpg-${CNPG_VERSION}.yaml"
+          kubectl -n cnpg-system rollout status deployment/cnpg-controller-manager --timeout=180s
+
+      - name: Apply the ${{ inputs.environment }} overlay
+        run: kubectl apply -k "deploy/k8s/overlays/${{ inputs.environment }}"
+
+      - name: Wait for app rollouts
+        run: |
+          for d in web telemetry assessment media; do
+            kubectl -n maagaparuga rollout status "deployment/$d" --timeout=300s || true
+          done
+
+      - name: Post-deploy smoke test
+        run: make dev-smoke

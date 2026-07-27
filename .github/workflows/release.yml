@@ -1,0 +1,89 @@
+# Release pipeline — triggered by pushing a semver tag (e.g. v1.0.0).
+# Publishes IMMUTABLE, versioned images and cuts a GitHub Release. Day-to-day dev
+# images (:dev/:latest/:sha on master) come from build-images.yml; this is the
+# tagged-release path. Fixes ship as a NEW tag — published versions never change.
+#
+# The image matrix mirrors build-images.yml — keep the two in sync.
+name: release
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+permissions:
+  contents: write # create the GitHub Release
+  packages: write # push versioned images to GHCR
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  images:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: web
+            context: apps/web
+            file: apps/web/Dockerfile
+            image: ghcr.io/marco-montesines/maagaparuga-web
+          - name: telemetry
+            context: .
+            file: services/telemetry/Dockerfile
+            image: ghcr.io/marco-montesines/maagaparuga-telemetry
+          - name: assessment
+            context: services/assessment
+            file: services/assessment/Dockerfile
+            image: ghcr.io/marco-montesines/maagaparuga-assessment
+          - name: media
+            context: services/media
+            file: services/media/Dockerfile
+            image: ghcr.io/marco-montesines/maagaparuga-media
+          - name: zitadel-bootstrap
+            context: tools/zitadel-bootstrap
+            file: tools/zitadel-bootstrap/Dockerfile
+            image: ghcr.io/marco-montesines/maagaparuga-zitadel-bootstrap
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      # From tag v1.2.3 -> :1.2.3, :1.2, :1 (immutable). No :latest here — that
+      # tracks master in build-images.yml.
+      - id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ matrix.image }}
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern={{major}}
+      - uses: docker/build-push-action@v6
+        with:
+          context: ${{ matrix.context }}
+          file: ${{ matrix.file }}
+          platforms: linux/amd64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha,scope=${{ matrix.name }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.name }}
+          provenance: false
+
+  github-release:
+    needs: images
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # Auto-generate notes from merged PRs/commits since the previous tag. Only
+      # the workflow's built-in token is used — no stored secrets.
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "${{ github.ref_name }}" --verify-tag --generate-notes --title "${{ github.ref_name }}"

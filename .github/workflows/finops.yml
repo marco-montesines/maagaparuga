@@ -1,0 +1,70 @@
+# FinOps guardrail — block infra changes that breach budget, use a disallowed
+# machine type, or drop the required cost-attribution labels. Runs cost-guard
+# (tools/cost-guard) against a real `terragrunt plan` for each environment.
+#
+# SCAFFOLD — authored ahead of a live environment; validate once the state
+# backend + token secrets exist. cost-guard itself is committed and tested (see
+# tools/cost-guard/README.md); this wires it into PRs.
+#
+# Required secrets/vars (Settings → Secrets and variables → Actions):
+#   secrets: HCLOUD_TOKEN, TF_STATE_ACCESS_KEY_ID, TF_STATE_SECRET_ACCESS_KEY
+#   vars:    TG_STATE_BUCKET, TG_STATE_ENDPOINT, TG_STATE_REGION
+# (These mirror infra/terragrunt/env.sh — the B2/Hetzner credentials Terraform
+# reads. Runs on same-repo PRs only, where secrets are available.)
+#
+# PREREQUISITE: commit a price snapshot once so `check` can run offline —
+#   HCLOUD_TOKEN=... python3 tools/cost-guard/cost_guard.py refresh --date <YYYY-MM-DD>
+#   git add tools/cost-guard/prices.json
+# (`refresh` needs the token; `check` then runs offline against the snapshot.)
+name: finops
+
+on:
+  pull_request:
+    paths:
+      - infra/**
+      - .github/workflows/finops.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  cost-guard:
+    # Fork/Dependabot PRs don't get secrets — skip them (nothing to plan against).
+    if: github.event.pull_request.head.repo.full_name == github.repository || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        environment: [staging, production]
+    env:
+      HCLOUD_TOKEN: ${{ secrets.HCLOUD_TOKEN }}
+      AWS_ACCESS_KEY_ID: ${{ secrets.TF_STATE_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.TF_STATE_SECRET_ACCESS_KEY }}
+      TG_STATE_BUCKET: ${{ vars.TG_STATE_BUCKET }}
+      TG_STATE_ENDPOINT: ${{ vars.TG_STATE_ENDPOINT }}
+      TG_STATE_REGION: ${{ vars.TG_STATE_REGION }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: opentofu/setup-opentofu@v1
+        with:
+          tofu_wrapper: false
+      - name: Install Terragrunt
+        run: |
+          TG_VERSION=0.67.0
+          sudo curl -sSfL "https://github.com/gruntwork-io/terragrunt/releases/download/v${TG_VERSION}/terragrunt_linux_amd64" -o /usr/local/bin/terragrunt
+          sudo chmod +x /usr/local/bin/terragrunt
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Plan ${{ matrix.environment }}
+        working-directory: infra/terragrunt/${{ matrix.environment }}
+        run: |
+          terragrunt init -input=false
+          terragrunt plan -out=tf.plan -input=false
+          terragrunt show -json tf.plan > plan.json
+      - name: cost-guard check
+        run: >
+          python3 tools/cost-guard/cost_guard.py check
+          --plan "infra/terragrunt/${{ matrix.environment }}/plan.json"
+          --env "${{ matrix.environment }}"

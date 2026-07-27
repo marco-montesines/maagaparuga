@@ -1,0 +1,107 @@
+site_name: MaagapAruga
+site_description: >-
+  Open-source research and educational care-platform framework covering
+  telemedicine records, biotelemetry ingest, and assessment scoring for care teams.
+site_url: https://marco-montesines.github.io/maagaparuga/
+repo_url: https://github.com/marco-montesines/maagaparuga
+repo_name: marco-montesines/maagaparuga
+edit_uri: edit/master/docs/
+copyright: Apache-2.0 licensed. Research and educational framework — not a medical device.
+
+theme:
+  name: material
+  logo: assets/logo.svg
+  favicon: assets/logo.svg
+  icon:
+    repo: fontawesome/brands/github
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: teal
+      accent: teal
+      toggle:
+        icon: material/weather-night
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: teal
+      accent: teal
+      toggle:
+        icon: material/weather-sunny
+        name: Switch to light mode
+  font:
+    text: Inter
+    code: JetBrains Mono
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - navigation.top
+    - navigation.tracking
+    - navigation.indexes
+    - toc.follow
+    - content.code.copy
+    - content.code.annotate
+    - search.suggest
+    - search.highlight
+
+extra_css:
+  - assets/brand.css
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - md_in_html
+  - tables
+  - footnotes
+  - toc:
+      permalink: true
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.details
+  - pymdownx.emoji:
+      emoji_index: !!python/name:material.extensions.emoji.twemoji
+      emoji_generator: !!python/name:material.extensions.emoji.to_svg
+
+plugins:
+  - search
+
+# Kept in docs/ for the CI toolchain install, but not part of the rendered site.
+exclude_docs: |
+  requirements.txt
+
+validation:
+  nav:
+    omitted_files: info # ADRs/runbooks are reached via their index pages, not nav
+  links:
+    absolute_links: ignore
+    unrecognized_links: ignore
+
+nav:
+  - Home: index.md
+  - Getting started:
+      - Installation: getting-started/installation.md
+      - Configuration: getting-started/configuration.md
+      - Deployment: getting-started/deployment.md
+  - Integration:
+      - Overview: integration/README.md
+      - IoMT devices: integration/iomt-devices.md
+      - Telemetry gRPC: integration/telemetry-grpc.md
+      - GraphQL BFF: integration/graphql-bff.md
+      - REST APIs: integration/rest-apis.md
+  - Architecture:
+      - Overview: architecture/overview.md
+      - Decision records: adr/README.md
+  - Operations:
+      - Overview: operations/README.md
+      - Runbooks: runbooks/README.md
+  - Infrastructure:
+      - Overview: iac/overview.md

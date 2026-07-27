@@ -1,0 +1,121 @@
+# Build + push the application container images to GHCR.
+#
+# The cloud overlays (staging/production) pull five images that are built FROM
+# THIS REPO. In dev they're built straight into minikube's Docker daemon
+# (`make web-rebuild`, etc.); in the cloud, k3s pulls them from
+# ghcr.io/marco-montesines/*. This workflow is what publishes them.
+#
+# Architecture: GitHub's ubuntu runners are amd64, and the Hetzner cpx32 fleet is
+# x86 (amd64) too — so we build linux/amd64 NATIVELY (no QEMU, fast). To also
+# target arm64 nodes (e.g. cax*) later, add `linux/arm64` to `platforms` and a
+# `docker/setup-qemu-action` step (roughly doubles build time).
+#
+# Visibility: while the repository is private the published packages are private
+# too, so k3s needs a read:packages pull secret (`ghcr-pull`, provisioned out of
+# band — see deploy/k8s/overlays/production/README.md). If the packages are made
+# public the pull secret can be dropped.
+name: build-images
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - apps/web/**
+      - services/telemetry/**
+      - services/assessment/**
+      - services/media/**
+      - tools/zitadel-bootstrap/**
+      - .github/workflows/build-images.yml
+  workflow_dispatch:
+    inputs:
+      extra_tag:
+        description: "Additional tag to publish (e.g. a release name); leave blank to skip"
+        required: false
+        default: ""
+
+permissions:
+  contents: read
+  packages: write
+
+# Let an in-flight build finish rather than cancelling — a half-pushed image is
+# worse than a slightly stale queue.
+concurrency:
+  group: build-images-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # Each Dockerfile's COPY paths define its expected build context: the four
+        # own-dir builds COPY relative to their own folder; telemetry's Dockerfile
+        # uses repo-root-relative paths (COPY services/telemetry/...), so it builds
+        # from the repo root. `file` is set explicitly to keep that unambiguous.
+        include:
+          - name: web
+            context: apps/web
+            file: apps/web/Dockerfile
+            image: ghcr.io/marco-montesines/maagaparuga-web
+          - name: telemetry
+            context: .
+            file: services/telemetry/Dockerfile
+            image: ghcr.io/marco-montesines/maagaparuga-telemetry
+          - name: assessment
+            context: services/assessment
+            file: services/assessment/Dockerfile
+            image: ghcr.io/marco-montesines/maagaparuga-assessment
+          - name: media
+            context: services/media
+            file: services/media/Dockerfile
+            image: ghcr.io/marco-montesines/maagaparuga-media
+          - name: zitadel-bootstrap
+            context: tools/zitadel-bootstrap
+            file: tools/zitadel-bootstrap/Dockerfile
+            image: ghcr.io/marco-montesines/maagaparuga-zitadel-bootstrap
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # `dev` matches the tag the cloud overlays pin (kustomize images: block), so
+      # a deploy picks up the newest build without editing manifests. We ALSO push
+      # an immutable sha-<short> tag — pin the overlay to that for a reproducible
+      # production release when you're ready (change base/kustomization.yaml newTag).
+      - name: Derive tags + OCI labels
+        id: meta
+        uses: docker/metadata-action@v6
+        with:
+          images: ${{ matrix.image }}
+          tags: |
+            type=raw,value=dev
+            type=raw,value=latest
+            type=sha,format=short
+            type=raw,value=${{ github.event.inputs.extra_tag }},enable=${{ github.event.inputs.extra_tag != '' }}
+
+      - name: Build + push
+        uses: docker/build-push-action@v7
+        with:
+          context: ${{ matrix.context }}
+          file: ${{ matrix.file }}
+          platforms: linux/amd64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          # Per-image layer cache in the Actions cache (keeps the heavy media
+          # build — ffmpeg + faster-whisper + torch — from recompiling each run).
+          cache-from: type=gha,scope=${{ matrix.name }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.name }}
+          # Single-arch, plain manifest — no provenance/SBOM attestation, which
+          # otherwise adds an unknown/unknown entry that confuses simple pulls.
+          provenance: false
