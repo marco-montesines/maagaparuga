@@ -121,10 +121,12 @@ jobs:
       - name: Lint (STANDARD)
         run: buf lint
         working-directory: proto
+      # Compare against the PR's base commit in the LOCAL clone (fetch-depth 0)
+      # rather than cloning the repo over HTTPS — the latter can't authenticate
+      # to a private repo ("could not read Username for github.com").
       - name: Breaking-change check vs master
         if: github.event_name == 'pull_request'
-        run: buf breaking --against "https://github.com/${{ github.repository }}.git#branch=master,subdir=proto"
-        working-directory: proto
+        run: buf breaking proto --against ".git#ref=${{ github.event.pull_request.base.sha }},subdir=proto"
 
   iac:
     name: iac — tofu fmt · validate · ansible-lint
@@ -163,6 +165,13 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0 # scan full history, not just the tip
-      - uses: gitleaks/gitleaks-action@v2
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
+      # Run the gitleaks CLI directly: the v2 action crashes on Node 24 during
+      # its octokit call on pull_request events. The CLI auto-loads .gitleaks.toml
+      # and works on any event.
+      - name: Install gitleaks
+        run: |
+          VERSION=8.24.3
+          curl -sSfL "https://github.com/gitleaks/gitleaks/releases/download/v${VERSION}/gitleaks_${VERSION}_linux_x64.tar.gz" \
+            | sudo tar -xz -C /usr/local/bin gitleaks
+      - name: gitleaks detect
+        run: gitleaks detect --source . --redact --no-banner
