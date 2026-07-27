@@ -10,10 +10,8 @@
 # target arm64 nodes (e.g. cax*) later, add `linux/arm64` to `platforms` and a
 # `docker/setup-qemu-action` step (roughly doubles build time).
 #
-# Visibility: while the repository is private the published packages are private
-# too, so k3s needs a read:packages pull secret (`ghcr-pull`, provisioned out of
-# band — see deploy/k8s/overlays/production/README.md). If the packages are made
-# public the pull secret can be dropped.
+# Visibility: the published packages are public, so no image-pull secret is
+# needed to deploy them.
 name: build-images
 
 on:

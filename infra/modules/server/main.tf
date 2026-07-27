@@ -6,7 +6,7 @@
 resource "hcloud_server" "node" {
   count = var.node_count
   # The name becomes the OS hostname + k8s node name (RFC 1123). The project is
-  # already lowercase (bgg-iac), so no case handling needed.
+  # already lowercase (maagaparuga), so no case handling needed.
   name        = "${var.name_prefix}-${count.index + 1}"
   image       = var.image
   server_type = var.server_type

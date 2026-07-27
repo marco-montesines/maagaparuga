@@ -35,8 +35,7 @@ Create these before/right after `apply` — from a gitignored `secrets/*.env`, a
 | `telemetry-secrets` | `DEVICE_CLIENT_*` | from bootstrap (device-auth) |
 | `media-s3` | `S3_ACCESS_KEY`, `S3_SECRET_KEY` | media object store |
 | `grafana-admin` | user/pass | |
-| **`pg-backup-s3`** | `ACCESS_KEY_ID`, `ACCESS_SECRET_KEY` | **Backblaze B2 app key** (offsite WORM backups → `s3://bgg-iac-pg-backups/`) |
-| **`ghcr-pull`** | docker-registry | **GHCR read:packages** pull secret for the private app images (needed while the packages are private). The Ansible deploy role creates it from `ghcr_pull_token`; or by hand: `kubectl -n maagaparuga create secret docker-registry ghcr-pull --docker-server=ghcr.io --docker-username=marco-montesines --docker-password=<PAT>`. The `default` ServiceAccount references it, so every app pod inherits it. Drop it if the packages are made public. |
+| **`pg-backup-s3`** | `ACCESS_KEY_ID`, `ACCESS_SECRET_KEY` | **Backblaze B2 app key** (offsite WORM backups → `s3://maagaparuga-pg-backups/`) |
 
 Then run the bootstrap (`make dev-bootstrap` equivalent against this cluster:
 ZITADEL project/clients + `fga:bootstrap` + inject store/model), device-auth, and
@@ -44,7 +43,10 @@ media-auth so `AUTH_MODE=jwt` has its issuer + OpenFGA ids.
 
 ## Staged hardening (tracked)
 
-- **OpenSearch security** plugin on (currently off; in-cluster/private only).
+- **OpenSearch security plugin** — off by design (OpenSearch is cluster-internal
+  only: ClusterIP, no edge route, firewall default-deny, so access is governed by
+  network isolation). Enabling it (in-cluster TLS + per-client auth) is optional
+  defense-in-depth, deferred + documented.
 - **True multi-node** OpenSearch / ClickHouse / NATS / SeaweedFS clustering
   (single-node today; Postgres is already 3-instance HA).
 
