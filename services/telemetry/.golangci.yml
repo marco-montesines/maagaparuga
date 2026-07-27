@@ -1,0 +1,69 @@
+# Go linting for the telemetry service.
+#
+# The rule set encodes the conventions this codebase follows — Effective Go
+# plus the Uber Go style guide (github.com/uber-go/guide) — so CI enforces
+# them instead of relying on review:
+#   - errors wrapped, never discarded          (errcheck, errorlint, wrapcheck)
+#   - no shadowed builtins or globals          (predeclared, gochecknoglobals)
+#   - reduced nesting, early returns           (nestif, revive)
+#   - consistent naming and doc comments       (revive, stylecheck)
+#   - no unused code, no obvious bugs          (unused, govet, staticcheck)
+version: "2"
+
+linters:
+  enable:
+    - errorlint       # errors.Is/As over == and type assertions
+    - wrapcheck       # errors from other packages must be wrapped with context
+    - predeclared     # no shadowing of min, max, len, ...
+    - gochecknoglobals # mutable package-level state
+    - gochecknoinits  # no hidden init() side effects
+    - nestif          # deep nesting signals a missing early return
+    - revive          # broad style linter (golint successor)
+    - misspell
+    - unconvert
+    - unparam
+    - nakedret
+    - bodyclose
+    - contextcheck    # context propagated, not dropped
+    - noctx
+    - wsl_v5          # whitespace/cuddling rules from the Uber guide
+
+  settings:
+    revive:
+      rules:
+        - name: exported          # exported symbols carry doc comments
+        - name: error-strings     # lowercase, no trailing punctuation
+        - name: error-return      # error is the last return value
+        - name: context-as-argument
+        - name: indent-error-flow
+    wrapcheck:
+      # golangci-lint v2 REPLACES wrapcheck's built-in ignore-sigs when this key
+      # is set (it does not append), so the defaults must be re-listed — otherwise
+      # every fmt.Errorf("…: %w", err) / errors.New(…) is flagged as "unwrapped".
+      # Defaults + our gRPC status constructors (already contextual).
+      ignore-sigs:
+        - .Errorf(
+        - errors.New(
+        - errors.Unwrap(
+        - errors.Join(
+        - .Wrap(
+        - .Wrapf(
+        - .WithMessage(
+        - .WithMessagef(
+        - .WithStack(
+        - status.Error(
+        - status.Errorf(
+
+  exclusions:
+    rules:
+      # Generated protobuf code is not ours to style.
+      - path: gen/
+        linters: [revive, stylecheck, wrapcheck, gochecknoglobals, unused]
+      # Tests may use package-level fixtures and skip wrapping.
+      - path: _test\.go
+        linters: [wrapcheck, gochecknoglobals, unparam]
+
+formatters:
+  enable:
+    - gofmt
+    - goimports
