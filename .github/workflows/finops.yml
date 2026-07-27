@@ -2,20 +2,31 @@
 # machine type, or drop the required cost-attribution labels. Runs cost-guard
 # (tools/cost-guard) against a real `terragrunt plan` for each environment.
 #
-# SCAFFOLD — authored ahead of a live environment; validate once the state
-# backend + token secrets exist. cost-guard itself is committed and tested (see
-# tools/cost-guard/README.md); this wires it into PRs.
+# SCAFFOLD — dormant until the cloud backend exists. The cost-guard job is gated
+# on `vars.TG_STATE_BUCKET` (see the job's `if:`), so it SKIPS cleanly until the
+# settings below are configured, then activates automatically. cost-guard itself
+# is committed and tested (tools/cost-guard/README.md); this wires it into PRs.
 #
-# Required secrets/vars (Settings → Secrets and variables → Actions):
-#   secrets: HCLOUD_TOKEN, TF_STATE_ACCESS_KEY_ID, TF_STATE_SECRET_ACCESS_KEY
-#   vars:    TG_STATE_BUCKET, TG_STATE_ENDPOINT, TG_STATE_REGION
-# (These mirror infra/terragrunt/env.sh — the B2/Hetzner credentials Terraform
-# reads. Runs on same-repo PRs only, where secrets are available.)
-#
-# PREREQUISITE: commit a price snapshot once so `check` can run offline —
+# ── TO ACTIVATE (once the B2 state bucket + Hetzner project exist) ────────────
+# Settings → Secrets and variables → Actions:
+#   Secrets:
+#     HCLOUD_TOKEN, TF_STATE_ACCESS_KEY_ID, TF_STATE_SECRET_ACCESS_KEY
+#       — mirror infra/terragrunt/env.sh: the Hetzner token + the B2 S3 key/secret
+#         mapped onto AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY.
+#     TF_VAR_admin_allowed_ips   e.g. ["1.2.3.4/32"]   ┐ the two REQUIRED tfvars
+#     TF_VAR_ssh_key_names       e.g. ["mykey"]        ┘ inputs (no defaults) that
+#       normally live in the gitignored secrets.auto.tfvars and are ABSENT in CI.
+#   Variables:
+#     TG_STATE_BUCKET, TG_STATE_ENDPOINT, TG_STATE_REGION
+#       — same values as env.sh (e.g. maagaparuga-tfstate /
+#         https://s3.eu-central-003.backblazeb2.com / eu-central-003).
+# Then UNCOMMENT the two TF_VAR_* lines in this job's `env:` block below — the
+# plan needs them and they are not wired yet.
+# Also commit a price snapshot once so `check` runs offline:
 #   HCLOUD_TOKEN=... python3 tools/cost-guard/cost_guard.py refresh --date <YYYY-MM-DD>
 #   git add tools/cost-guard/prices.json
-# (`refresh` needs the token; `check` then runs offline against the snapshot.)
+# Runs on same-repo PRs only (forks/Dependabot get no secrets).
+# ─────────────────────────────────────────────────────────────────────────────
 name: finops
 
 on:
@@ -30,8 +41,13 @@ permissions:
 
 jobs:
   cost-guard:
-    # Fork/Dependabot PRs don't get secrets — skip them (nothing to plan against).
-    if: github.event.pull_request.head.repo.full_name == github.repository || github.event_name == 'workflow_dispatch'
+    # Skip until the remote-state backend is configured (TG_STATE_BUCKET var set)
+    # — the plan needs real B2/Hetzner creds, so before then there is nothing to
+    # check and the job would only fail. Also skip fork/Dependabot PRs (no secrets).
+    # Once the backend vars/secrets exist, this activates automatically.
+    if: >-
+      vars.TG_STATE_BUCKET != '' &&
+      (github.event.pull_request.head.repo.full_name == github.repository || github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -44,6 +60,10 @@ jobs:
       TG_STATE_BUCKET: ${{ vars.TG_STATE_BUCKET }}
       TG_STATE_ENDPOINT: ${{ vars.TG_STATE_ENDPOINT }}
       TG_STATE_REGION: ${{ vars.TG_STATE_REGION }}
+      # Required tfvars inputs (normally in the gitignored secrets.auto.tfvars, so
+      # absent in CI). UNCOMMENT to activate — see the "TO ACTIVATE" header block.
+      # TF_VAR_admin_allowed_ips: ${{ secrets.TF_VAR_ADMIN_ALLOWED_IPS }}
+      # TF_VAR_ssh_key_names: ${{ vars.TF_VAR_SSH_KEY_NAMES }}
     steps:
       - uses: actions/checkout@v4
       - uses: opentofu/setup-opentofu@v1
