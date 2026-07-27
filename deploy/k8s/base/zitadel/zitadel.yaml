@@ -1,7 +1,7 @@
 # ZITADEL — OIDC identity provider (ADR 0009). State lives in PostgreSQL
 # (role/database managed by the CNPG cluster manifest).
 # Dev runs without TLS behind APISIX; cloud overlays set the external domain
-# and secure mode (P6).
+# and secure mode.
 #
 # On first-instance init ZITADEL creates an admin **machine (service) user**
 # and writes its JSON key to /machinekey (a shared PVC). The bootstrap Job
@@ -52,7 +52,7 @@ spec:
             - --masterkeyFromEnv
             # dev: plain HTTP, no external TLS terminator assumed, so the
             # issuer is http://<externalDomain>:<externalPort>. Cloud overlays
-            # set --tlsMode external behind the gateway's TLS (P6).
+            # set --tlsMode external behind the gateway's TLS.
             - --tlsMode
             - disabled
           env:

@@ -1,7 +1,7 @@
 
 # MaagapAruga — developer entry points.
-# `make dev` brings up the full platform on minikube (P1 scope: data layer,
-# broker, identity stack, gateway; app services activate as P2-P4 land).
+# `make dev` brings up the full platform on minikube (data layer,
+# broker, identity stack, gateway; app services activate as they are built).
 
 BUF ?= $(shell command -v buf 2>/dev/null || echo $(HOME)/go/bin/buf)
 
@@ -113,7 +113,7 @@ dev-smoke: ## Post-deploy smoke test: every service answered through its own ent
 		clickhouse-client --user $$CH_USER --password $$CH_PASS \
 		-q "SELECT count() FROM maagaparuga.vitals" 2>/dev/null \
 		| sed 's/^/   vitals rows: /' || echo "   vitals table not created yet"
-	@echo "(assessment + media join this suite in P4/P4b)"
+	@echo "(assessment + media join this suite once available)"
 
 .PHONY: dev-bootstrap
 dev-bootstrap: ## Configure ZITADEL + OpenFGA and inject client id/secret + store ids into the running cluster

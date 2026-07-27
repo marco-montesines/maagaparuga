@@ -1,4 +1,4 @@
-# infra — Infrastructure as Code (P6)
+# infra — Infrastructure as Code
 
 Provisions the staging and production clusters on **Hetzner Cloud** with
 **OpenTofu/Terraform + Terragrunt**, then hands off to **Ansible** to install k3s

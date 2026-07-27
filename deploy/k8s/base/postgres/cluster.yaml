@@ -5,7 +5,7 @@
 # CNPG auto-creates the `maagaparuga-pg-app` secret (user `app`, db `app`)
 # used by the application services. ZITADEL and OpenFGA get their own roles
 # and databases below; their passwords come from per-overlay secrets
-# (dev: generated literals, cloud: provisioned in P6).
+# (dev: generated literals, cloud: provisioned credentials).
 apiVersion: postgresql.cnpg.io/v1
 kind: Cluster
 metadata:
@@ -30,7 +30,7 @@ spec:
   # Continuous backup: WAL archiving + base backups to S3-compatible storage
   # (dev: the in-cluster SeaweedFS). This gives point-in-time recovery — a base
   # backup plus every WAL segment since. The dev target shares the node, so it
-  # demonstrates the MECHANISM, not disaster recovery; cloud overlays (P6)
+  # demonstrates the MECHANISM, not disaster recovery; cloud overlays
   # repoint destinationPath/endpointURL at durable, off-node object storage.
   # (In-tree barman is deprecated upstream in favour of the barman-cloud
   # plugin; kept here because it needs no extra operator install for dev.)

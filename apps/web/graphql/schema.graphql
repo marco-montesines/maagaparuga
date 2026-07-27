@@ -1,8 +1,8 @@
 "MaagapAruga GraphQL BFF (ADR 0010): aggregation across polyglot services.
 One dashboard query returns the care record (PostgreSQL), the latest vitals
-window (telemetry service — gRPC in P3, faked until then), assessment results
-(PostgreSQL, written by the assessment service), and media search hits
-(OpenSearch hybrid in P4b, faked until then)."
+window (telemetry service — gRPC when available, faked until then), assessment
+results (PostgreSQL, written by the assessment service), and media search hits
+(OpenSearch hybrid when available, faked until then)."
 
 scalar DateTime @scalar(class: "Nuwave\\Lighthouse\\Schema\\Types\\Scalars\\DateTime")
 
@@ -19,7 +19,7 @@ type Query {
         @guard
         @field(resolver: "App\\GraphQL\\Queries\\DashboardQuery")
 
-    "Hybrid (keyword + semantic) search over transcribed media (P4b backend)."
+    "Hybrid (keyword + semantic) search over transcribed media."
     mediaSearch(careRecipientId: ID!, query: String!): [MediaHit!]!
         @guard
         @field(resolver: "App\\GraphQL\\Queries\\MediaSearchQuery")

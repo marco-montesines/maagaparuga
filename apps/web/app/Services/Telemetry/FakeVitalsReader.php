@@ -2,7 +2,7 @@
 
 namespace App\Services\Telemetry;
 
-/** Deterministic synthetic vitals (seeded per recipient) until P3's gRPC client lands. */
+/** Deterministic synthetic vitals (seeded per recipient) until the gRPC client lands. */
 class FakeVitalsReader implements VitalsReader
 {
     public function latestWindow(int $careRecipientId, int $samples = 12): array

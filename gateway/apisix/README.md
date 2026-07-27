@@ -10,7 +10,7 @@ The live configuration is the ConfigMap in
 (routes + the compiled gRPC descriptor set); this directory holds the standalone
 config as it moves toward a per-environment layout.
 
-**Status (P5 partial, 2026-07-23):** routing live; **edge authentication** enforced
+**Status (partial, 2026-07-23):** routing live; **edge authentication** enforced
 on the REST telemetry routes via the `openid-connect` plugin (bearer-only + JWKS
 against ZITADEL) — anonymous/invalid → `401`, valid token validated *and* forwarded
 so the service re-checks. Web app + ZITADEL login stay open (browser sessions, not

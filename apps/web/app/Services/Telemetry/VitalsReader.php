@@ -4,7 +4,7 @@ namespace App\Services\Telemetry;
 
 /**
  * Windowed vitals reads from the telemetry service. The real implementation
- * (P3) calls the Go service's gRPC read API; until then a fake supplies
+ * calls the Go service's gRPC read API; until then a fake supplies
  * clearly-synthetic samples so the BFF contract is exercised end to end.
  */
 interface VitalsReader

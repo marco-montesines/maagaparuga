@@ -1,4 +1,4 @@
-# P6 HARDENING TODO (top item): enable the OpenSearch security plugin (TLS + auth)
+# HARDENING TODO (top item): enable the OpenSearch security plugin (TLS + auth)
 # in production. That is deferred because it must be wired across every client
 # (PHP/Go/Python + Grafana) with self-signed-cert trust, and needs a live cluster
 # to validate. Until then OpenSearch runs security-off — reachable ONLY in-cluster

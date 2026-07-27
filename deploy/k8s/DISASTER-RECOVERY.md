@@ -25,9 +25,9 @@ design question, not an afterthought.
 | Data | Tool | Why | Model |
 |------|------|-----|-------|
 | **PostgreSQL** (care records, users, ZITADEL, OpenFGA) | **CNPG / barman** — base backup + continuous WAL archiving | Consistent, gives **PITR** (restore to any second). WAL *is* the incremental. | implemented |
-| **Object storage** (SeaweedFS: media, attachments, telemetry archive) | **restic** → immutable offsite bucket | Incremental, deduplicated, **client-side encrypted**, append-only repo | design (P6) |
-| **ClickHouse** (vitals time-series) | `clickhouse-backup` → S3 | Engine-native consistent snapshots | design (P6) |
-| **OpenSearch** (search / vectors / logs) | Snapshot API → S3 repo | Re-derivable, but snapshotted to shorten RTO | design (P6) |
+| **Object storage** (SeaweedFS: media, attachments, telemetry archive) | **restic** → immutable offsite bucket | Incremental, deduplicated, **client-side encrypted**, append-only repo | design |
+| **ClickHouse** (vitals time-series) | `clickhouse-backup` → S3 | Engine-native consistent snapshots | design |
+| **OpenSearch** (search / vectors / logs) | Snapshot API → S3 repo | Re-derivable, but snapshotted to shorten RTO | design |
 
 Postgres is the **system of record**; the others are largely re-derivable from
 it + object storage, which is why Postgres PITR is the priority and is done
@@ -43,18 +43,18 @@ Ransomware today targets backups first. Controls, in priority order:
    (or restic append-only repos): a backup, once written, cannot be modified or
    deleted before its retention expires, **even with admin credentials**. This
    is the single most important control and the one dev cannot fully model
-   (in-cluster SeaweedFS shares the node) — cloud overlays (P6) target
+   (in-cluster SeaweedFS shares the node) — cloud overlays target
    **Backblaze B2** (Object-Lock/WORM, cheap). *DigitalOcean Spaces was
    considered for cross-provider separation but has no Object Lock (verified
    2026), so it can't be the sole immutable target.*
 2. **Separate, write-only credentials** — the cluster's backup credential can
    `PutObject` but not `DeleteObject`/`PutBucketLifecycle`. Deletion/expiry is a
    separate identity the app never holds. (Dev uses a full-access dev key for
-   simplicity; P6 splits it.)
+   simplicity; the cloud overlays split it.)
 3. **Client-side encryption** — backups encrypted before they leave the cluster
    (restic native; barman `encryption`), so an offsite copy leaks nothing.
 4. **Offsite / off-*provider*** — dev backs up to in-cluster SeaweedFS on the
-   *same node*: this proves the mechanism, **not** DR. P6 repoints
+   *same node*: this proves the mechanism, **not** DR. The cloud overlays repoint
    `destinationPath`/`endpointURL` at **Backblaze B2 — a different provider from
    the Hetzner core**, so a compromise or outage of the primary cloud account
    cannot take the platform *and* its backups at once. (Backup target provider is
@@ -101,12 +101,12 @@ spec:
 - **RPO** (data loss window): minutes — bounded by WAL archive frequency, not
   the nightly base backup.
 - **RTO** (time to restore): the recovery cluster above reached healthy in well
-  under a minute at dev scale; real RTO is set by data volume + network in P6.
+  under a minute at dev scale; real RTO is set by data volume + network in the cloud deployment.
 
 ## Status
 
 - **Done:** Postgres continuous backup (WAL + base) to S3, retention, daily
   `ScheduledBackup`, and a **verified full restore**.
-- **P6:** object-store Object Lock/immutability, split write-only credentials,
+- **Planned:** object-store Object Lock/immutability, split write-only credentials,
   client-side encryption, off-node/offsite target, restic for the object layer,
   ClickHouse/OpenSearch backups, and scheduled restore drills wired to alerting.

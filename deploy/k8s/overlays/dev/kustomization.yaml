@@ -2,8 +2,8 @@
 #
 # DEV-ONLY CREDENTIALS: the generated secrets below are well-known local
 # values for a throwaway minikube cluster. They are NOT secrets and are NEVER
-# used in staging/production — cloud overlays get real secret provisioning in
-# P6. This is mock infrastructure for a research/educational platform.
+# used in staging/production — cloud overlays get real secret provisioning.
+# This is mock infrastructure for a research/educational platform.
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 
@@ -39,7 +39,7 @@ secretGenerator:
     literals:
       - password=dev-redis-pw
   # Media service S3 identity — matches the `dev` identity in
-  # seaweedfs-s3-config.json. Dev-only well-known creds; P6 provisions real ones.
+  # seaweedfs-s3-config.json. Dev-only well-known creds; cloud overlays provision real ones.
   - name: media-s3
     literals:
       - S3_ACCESS_KEY=dev-maagaparuga
@@ -58,7 +58,7 @@ secretGenerator:
       # Set after `php artisan fga:bootstrap` (empty = authz fails closed).
       - OPENFGA_STORE_ID=
       - OPENFGA_MODEL_ID=
-      # Set after the ZITADEL client is registered (P2 follow-up).
+      # Set after the ZITADEL client is registered (web-service follow-up).
       - ZITADEL_CLIENT_ID=
       - ZITADEL_CLIENT_SECRET=
       - ZITADEL_REDIRECT_URI=http://maagaparuga.test:9080/auth/callback
@@ -71,13 +71,13 @@ secretGenerator:
       - DEVICE_CLIENT_SECRET=
   # S3 credentials CNPG uses to archive Postgres to the in-cluster SeaweedFS.
   # Dev-only well-known creds matching seaweedfs-s3-config.json (the `dev`
-  # identity); cloud overlays provide real, provisioned credentials (P6).
+  # identity); cloud overlays provide real, provisioned credentials.
   - name: pg-backup-s3
     literals:
       - ACCESS_KEY_ID=dev-maagaparuga
       - ACCESS_SECRET_KEY=dev-seaweedfs-secret
   # Grafana admin login (dev-only, well-known). Cloud overlays provision a real
-  # password (P6).
+  # password.
   - name: grafana-admin
     literals:
       - username=admin
@@ -87,7 +87,7 @@ generatorOptions:
   disableNameSuffixHash: true   # stable names so base manifests can reference them
 
 # Dev-only: device auth is off until the ZITADEL client + device service
-# account are bootstrapped (P2/P3 follow-up). The telemetry service prints a
+# account are bootstrapped (web + telemetry follow-up). The telemetry service prints a
 # warning on every start while this is set, so it cannot pass unnoticed.
 configMapGenerator:
   - name: web-config
@@ -161,7 +161,7 @@ patches:
   # telemetry + telemetry-writer, assessment, media + media-worker. The
   # apps-scale-zero patch is retired — nothing left to hold at 0.)
   # Dev runs OpenSearch with the security plugin disabled (no TLS/auth noise
-  # locally); cloud overlays enable security with real credentials (P6).
+  # locally); cloud overlays enable security with real credentials.
   - path: patches/opensearch-dev.yaml
   # Expose the gateway and a few consoles on stable NodePorts for the host.
   - path: patches/nodeports.yaml

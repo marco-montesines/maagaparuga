@@ -76,7 +76,7 @@ mapping rather than canonical protobuf JSON, so timestamps are
 `"_field":"field"` marker for each present optional field (a presence
 indicator, not data).
 
-The gateway enforces auth on these routes (P5): a request without a valid
+The gateway enforces auth on these routes: a request without a valid
 bearer token is rejected `401` at the edge, before it reaches the service.
 
 ```bash

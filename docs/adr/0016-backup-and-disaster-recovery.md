@@ -107,10 +107,10 @@ another) — a hybrid, provider-portable topology. Full strategy:
   review gate.
 - **Dev is not DR:** local backups land in-cluster on the same node — they prove
   the mechanism. Real disaster recovery depends on the **cloud overlays**
-  repointing at durable, immutable, off-node storage (**P6**).
+  repointing at durable, immutable, off-node storage.
 - **Not yet implemented:** ClickHouse (`clickhouse-backup`) and OpenSearch
   (snapshot API) backups, the restic object-layer job, and the immutable-storage +
-  split-credential provisioning — all scheduled with the cloud overlays (P6);
+  split-credential provisioning — all scheduled with the cloud overlays;
   designed in the DR doc.
 - **Revisit when:** CNPG forces the plugin migration (≤1.31 boundary); a second
   provider/account is added for true air-gap; or restore drills are wired into

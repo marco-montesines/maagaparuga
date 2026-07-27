@@ -36,7 +36,7 @@ return [
     ],
 
     // OpenSearch — transcription full-text index (app-side lexical search;
-    // the media pipeline's vector search is P4b's own index).
+    // the media pipeline's vector search is its own index).
     'opensearch' => [
         'url' => env('OPENSEARCH_URL', 'http://opensearch:9200'),
     ],

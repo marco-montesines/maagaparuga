@@ -14,4 +14,4 @@ rule's `runbook:` annotation points at a file here.
 
 More runbooks land alongside the rest of the alert catalog (ingest stall,
 consumer lag, replication lag, disk headroom, gateway p95/5xx, …) as that
-observability tier is built out (P6b).
+observability tier is built out.

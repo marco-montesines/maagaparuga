@@ -4,7 +4,7 @@
 # Results upload to the repository's Security tab (code scanning), which is FREE
 # once the repository is PUBLIC. On a private repo the upload needs GitHub
 # Advanced Security and otherwise fails ("Code scanning is not enabled"), so for
-# now this runs on manual dispatch only. At the public flip, add the automatic
+# now this runs on manual dispatch only. Once the repository is public, add the automatic
 # triggers below to gate every push and PR:
 #     push: { branches: [master] }
 #     pull_request:

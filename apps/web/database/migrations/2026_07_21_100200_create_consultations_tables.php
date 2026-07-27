@@ -31,7 +31,7 @@ return new class extends Migration
             $table->foreignId('consultation_id')->constrained()->cascadeOnDelete();
             $table->string('kind')->index();
             $table->string('object_key');            // S3 data-lake key (claim-check)
-            $table->string('media_id')->nullable();  // media-service catalog ref (P4b)
+            $table->string('media_id')->nullable();  // media-service catalog ref
             $table->string('caption')->nullable();
             $table->timestamps();
         });

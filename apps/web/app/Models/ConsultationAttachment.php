@@ -10,7 +10,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 /**
  * References into the S3 data lake (claim-check: the binary never lives in
- * PostgreSQL). `media_id` links to the media-service catalog once the P4b
+ * PostgreSQL). `media_id` links to the media-service catalog once the media
  * pipeline has processed the object (transcript + embeddings).
  */
 class ConsultationAttachment extends Model

@@ -24,7 +24,7 @@ metadata:
 data:
   # Contact point + policy: where a firing alert is delivered. The dev target
   # is a placeholder webhook; cloud overlays point it at real on-call
-  # (Slack/PagerDuty/email) in P6.
+  # (Slack/PagerDuty/email).
   contactpoints.yaml: |
     apiVersion: 1
     contactPoints:

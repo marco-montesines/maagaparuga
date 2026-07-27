@@ -43,7 +43,7 @@ adapters ship, chosen by config:
 
 ## Status
 
-**In progress (P4).** Built: the full scoring core (NEWS2 + DASS-21 + fuzzy risk),
+**In progress.** Built: the full scoring core (NEWS2 + DASS-21 + fuzzy risk),
 the FastAPI surface, the orchestration + persistence (`assessment_results` +
 `alerts`), and **both** vitals readers — `pytest` (109 tests) + `ruff` +
 `mypy --strict` green. Next: a Dockerfile, the deployment wiring (image + probes

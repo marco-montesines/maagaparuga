@@ -1,4 +1,4 @@
-# media — mock imaging/AV pipeline (P4b)
+# media — mock imaging/AV pipeline
 
 Python/FastAPI service that ingests **synthetic** imaging and audio/video media,
 transcribes recorded consultations, and makes them searchable. No real clinical

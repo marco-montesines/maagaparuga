@@ -1,6 +1,6 @@
 # OpenFGA — relationship-based fine-grained authorization (ADR 0009).
 # Services call its gRPC API; state lives in PostgreSQL.
-# The authorization model (caregiver<->care-recipient assignments) ships in P2.
+# The authorization model (caregiver<->care-recipient assignments) ships with the web service.
 apiVersion: apps/v1
 kind: Deployment
 metadata:

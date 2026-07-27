@@ -47,7 +47,7 @@ images:
     newTag: v3.1.0
   - name: grafana/grafana
     newTag: 11.4.0
-  # Application images are built from this repository (P2-P4).
+  # Application images are built from this repository.
   - name: ghcr.io/marco-montesines/maagaparuga-web
     newTag: dev
   - name: ghcr.io/marco-montesines/maagaparuga-telemetry

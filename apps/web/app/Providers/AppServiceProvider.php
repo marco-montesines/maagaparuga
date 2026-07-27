@@ -25,9 +25,9 @@ class AppServiceProvider extends ServiceProvider
     {
         $this->app->singleton(OpenFgaClient::class, fn () => OpenFgaClient::fromConfig());
 
-        // Fakes until the real backends land: P3 swaps in the telemetry gRPC
-        // client, P4b the OpenSearch hybrid searcher. The GraphQL BFF contract
-        // stays identical when they do.
+        // Fakes until the real backends land: one swaps in the telemetry gRPC
+        // client, the other the OpenSearch hybrid searcher. The GraphQL BFF
+        // contract stays identical when they do.
         $this->app->bind(
             VitalsReader::class,
             FakeVitalsReader::class,

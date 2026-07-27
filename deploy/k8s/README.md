@@ -13,13 +13,13 @@ base/                  # every component, single-node defaults, exact image pins
   nats/                #   JetStream message broker
   zitadel/             #   OIDC identity provider
   openfga/             #   fine-grained authorization
-  apisix/              #   API gateway (standalone; routes + P5 edge auth, TLS/rate-limit TODO)
+  apisix/              #   API gateway (standalone; routes + edge auth, TLS/rate-limit TODO)
   observability/       #   Prometheus + Grafana (unified alerting; backup-failure alert)
-  apps/                #   app-service shells (images built in P2-P4)
+  apps/                #   app-service shells (images built from this repository)
 overlays/
   dev/                 # minikube: dev-only creds; web + telemetry live, assessment/media at 0
-  staging/             # k3s on the staging VM (P6)
-  production/          # k3s on the production VM (P6)
+  staging/             # k3s on the staging VM
+  production/          # k3s on the production VM
 ```
 
 ## Usage
@@ -46,11 +46,11 @@ services address each other by DNS name (`opensearch:9200`, `nats:4222`, …).
   a CR field the image transformer cannot reach.)
 - **Secrets**: the dev overlay generates **dev-only, well-known credentials** for a
   throwaway local cluster — they are not secrets. Cloud overlays receive real secret
-  provisioning in P6; nothing secret is ever committed (see `.gitignore`).
-- **App services** activate as their phase lands: **web (P2)** and **telemetry +
-  telemetry-writer (P3)** run at replicas 1; **assessment (P4)** and **media (P4b)**
+  provisioning; nothing secret is ever committed (see `.gitignore`).
+- **App services** activate as they are built: **web** and **telemetry +
+  telemetry-writer** run at replicas 1; **assessment** and **media**
   stay scaled to 0 until their images exist.
-- **Cluster shape**: node counts are variables; a `cluster` overlay (P6) demonstrates
+- **Cluster shape**: node counts are variables; a `cluster` overlay demonstrates
   OpenSearch x3, ClickHouse x3 + Keeper, PostgreSQL primary + replica (ADR 0014).
 - Every workload declares resource requests and limits (FinOps: right-sizing on small
   VMs).

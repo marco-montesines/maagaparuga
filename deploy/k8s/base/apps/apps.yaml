@@ -1,9 +1,9 @@
 # Application services — deployment shells for the microservices (ADR 0014):
 # independently built, deployed, and scaled containers.
 #
-# The images are built in P2-P4; until then the dev overlay scales all of
-# these to 0 replicas. Probes, env wiring, and ports are finalized alongside
-# each service's implementation phase.
+# The images are built from this repository; until then the dev overlay scales
+# all of these to 0 replicas. Probes, env wiring, and ports are finalized
+# alongside each service's implementation.
 # In-cluster configuration shared by web + web-queue. Per-env values
 # (FGA store/model ids, ZITADEL client) come from overlays.
 apiVersion: v1
@@ -309,7 +309,7 @@ data:
   CLICKHOUSE_HOST: clickhouse
   CLICKHOUSE_PORT: "8123"
   CLICKHOUSE_DB: maagaparuga
-  CLICKHOUSE_USER: maagaparuga     # dev: the existing CH user; a read-only user is P6
+  CLICKHOUSE_USER: maagaparuga     # dev: the existing CH user; a read-only user comes with the cloud overlays
   WINDOW_MINUTES: "60"
   WINDOW_LIMIT: "500"
   # gRPC reader (VITALS_READER=grpc): TELEMETRY_GRPC + TELEMETRY_TOKEN injected at runtime.
@@ -442,7 +442,7 @@ spec:
       containers:
         - name: media
           image: ghcr.io/marco-montesines/maagaparuga-media:pinned
-          args: ["api"]                # upload intake + catalog + search API (P4b)
+          args: ["api"]                # upload intake + catalog + search API
           envFrom:
             - configMapRef:
                 name: media-config
@@ -559,7 +559,7 @@ spec:
       containers:
         - name: media-worker
           image: ghcr.io/marco-montesines/maagaparuga-media:pinned
-          args: ["worker"]             # JetStream consumer: FFmpeg -> faster-whisper -> embeddings (P4b)
+          args: ["worker"]             # JetStream consumer: FFmpeg -> faster-whisper -> embeddings
           envFrom:
             - configMapRef:
                 name: media-config

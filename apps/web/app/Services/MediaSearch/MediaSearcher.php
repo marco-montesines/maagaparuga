@@ -3,7 +3,7 @@
 namespace App\Services\MediaSearch;
 
 /**
- * Hybrid (BM25 + k-NN) media search. The real implementation (P4b) queries
+ * Hybrid (BM25 + k-NN) media search. The real implementation queries
  * OpenSearch with an app-side query embedding; until then a fake returns
  * clearly-synthetic hits so the BFF contract is exercised.
  */

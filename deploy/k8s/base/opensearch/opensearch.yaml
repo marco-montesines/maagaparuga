@@ -1,7 +1,7 @@
 # OpenSearch 3.x — full-text search + logs + vector DB (ADR 0005, 0006).
 # Single node by default; the cluster overlay demonstrates 3 nodes.
 # Dev runs with the security plugin disabled (see overlays/dev); cloud
-# overlays enable it with real credentials (P6).
+# overlays enable it with real credentials.
 apiVersion: apps/v1
 kind: StatefulSet
 metadata:
