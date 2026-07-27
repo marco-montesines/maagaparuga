@@ -3,7 +3,7 @@
 #
 # Illustrative computation over fictitious data only — not a medical device.
 
-FROM python:3.13-slim AS build
+FROM python:3.14-slim AS build
 WORKDIR /app
 # Install into an isolated venv so it copies cleanly into the runtime stage.
 ENV VIRTUAL_ENV=/opt/venv
@@ -13,7 +13,7 @@ COPY pyproject.toml ./
 COPY src ./src
 RUN pip install --no-cache-dir .
 
-FROM python:3.13-slim
+FROM python:3.14-slim
 # Non-root runtime (least privilege).
 RUN useradd --uid 10001 --create-home --shell /usr/sbin/nologin app
 ENV VIRTUAL_ENV=/opt/venv
