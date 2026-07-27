@@ -30,7 +30,7 @@ jobs:
       run:
         working-directory: apps/web
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: shivammathur/setup-php@v2
         with:
           php-version: "8.4" # matches composer.lock + the FrankenPHP runtime image
@@ -56,8 +56,8 @@ jobs:
       run:
         working-directory: services/telemetry
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
         with:
           go-version-file: services/telemetry/go.mod
           cache-dependency-path: services/telemetry/go.sum
@@ -87,8 +87,8 @@ jobs:
       run:
         working-directory: services/${{ matrix.service }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
           cache: pip
@@ -112,7 +112,7 @@ jobs:
     name: proto — buf lint + breaking
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0 # breaking check needs history to diff against master
       - uses: bufbuild/buf-setup-action@v1
@@ -130,8 +130,8 @@ jobs:
     name: iac — tofu fmt · validate · ansible-lint
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: opentofu/setup-opentofu@v1
+      - uses: actions/checkout@v7
+      - uses: opentofu/setup-opentofu@v2
         with:
           tofu_wrapper: false
       - name: OpenTofu fmt check
@@ -146,7 +146,7 @@ jobs:
               tofu -chdir="$m" validate
             fi
           done
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
       - name: ansible-lint
@@ -160,9 +160,9 @@ jobs:
     name: secrets — gitleaks
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0 # scan full history, not just the tip
-      - uses: gitleaks/gitleaks-action@v2
+      - uses: gitleaks/gitleaks-action@v3
         env:
           GITHUB_TOKEN: ${{ github.token }}
