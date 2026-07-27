@@ -3,7 +3,7 @@
 [![CI](https://github.com/marco-montesines/maagaparuga/actions/workflows/ci.yml/badge.svg)](https://github.com/marco-montesines/maagaparuga/actions/workflows/ci.yml)
 [![CodeQL](https://github.com/marco-montesines/maagaparuga/actions/workflows/codeql.yml/badge.svg)](https://github.com/marco-montesines/maagaparuga/actions/workflows/codeql.yml)
 [![Security](https://github.com/marco-montesines/maagaparuga/actions/workflows/security.yml/badge.svg)](https://github.com/marco-montesines/maagaparuga/actions/workflows/security.yml)
-[![Docs](https://img.shields.io/badge/docs-online-14b8a6)](https://marco-montesines.github.io/maagaparuga/docs/)
+[![Docs](https://img.shields.io/badge/docs-online-14b8a6)](https://marco-montesines.github.io/maagaparuga/)
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 
 > **Maagap** (Filipino: *prompt, timely, proactive*) + **Aruga** (Filipino: *nurturing, compassionate care*).

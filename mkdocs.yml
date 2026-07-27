@@ -2,7 +2,7 @@ site_name: MaagapAruga
 site_description: >-
   Open-source research and educational care-platform framework covering
   telemedicine records, biotelemetry ingest, and assessment scoring for care teams.
-site_url: https://marco-montesines.github.io/maagaparuga/docs/
+site_url: https://marco-montesines.github.io/maagaparuga/
 repo_url: https://github.com/marco-montesines/maagaparuga
 repo_name: marco-montesines/maagaparuga
 edit_uri: edit/master/docs/
