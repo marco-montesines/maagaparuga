@@ -3,7 +3,7 @@
 # Build from the repository root so the generated protobuf package is in scope:
 #   docker build -f services/telemetry/Dockerfile -t maagaparuga-telemetry .
 
-FROM golang:1.26-alpine AS build
+FROM golang:1.27-alpine AS build
 WORKDIR /src
 COPY services/telemetry/go.mod services/telemetry/go.sum ./
 RUN go mod download

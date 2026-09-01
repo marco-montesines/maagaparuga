@@ -20,7 +20,7 @@ COPY composer.json composer.lock ./
 RUN composer install --no-dev --no-interaction --no-scripts --prefer-dist --no-progress
 
 # --- optional: FrankenPHP with the Go-native maagap extension compiled in ---
-FROM dunglas/frankenphp:1.12.6-builder-php8.4 AS extension-builder
+FROM dunglas/frankenphp:1.12.7-builder-php8.4 AS extension-builder
 COPY --from=caddy:builder /usr/bin/xcaddy /usr/bin/xcaddy
 WORKDIR /src
 COPY frankenphp-ext ./frankenphp-ext
@@ -35,7 +35,7 @@ RUN CGO_CFLAGS="$(php-config --includes)" \
       --with github.com/marco-montesines/maagaparuga/apps/web/frankenphp-ext/extension=./frankenphp-ext/extension
 
 # --- application image (default target) ---
-FROM dunglas/frankenphp:1.12.6-php8.4 AS standard
+FROM dunglas/frankenphp:1.12.7-php8.4 AS standard
 RUN install-php-extensions pdo_pgsql pcntl opcache intl zip
 WORKDIR /app
 COPY --from=vendor /app/vendor ./vendor
