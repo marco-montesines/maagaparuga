@@ -65,8 +65,8 @@ jobs:
       # TF_VAR_admin_allowed_ips: ${{ secrets.TF_VAR_ADMIN_ALLOWED_IPS }}
       # TF_VAR_ssh_key_names: ${{ vars.TF_VAR_SSH_KEY_NAMES }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: opentofu/setup-opentofu@v1
+      - uses: actions/checkout@v7
+      - uses: opentofu/setup-opentofu@v2
         with:
           tofu_wrapper: false
       - name: Install Terragrunt
@@ -74,7 +74,7 @@ jobs:
           TG_VERSION=0.67.0
           sudo curl -sSfL "https://github.com/gruntwork-io/terragrunt/releases/download/v${TG_VERSION}/terragrunt_linux_amd64" -o /usr/local/bin/terragrunt
           sudo chmod +x /usr/local/bin/terragrunt
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
       - name: Plan ${{ matrix.environment }}
